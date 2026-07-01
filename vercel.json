@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "flutter build web --release --dart-define=GUOXUE_API_BASE_URL=$PUBLIC_API_URL",
+  "buildCommand": "bash deploy/vercel_build.sh",
   "outputDirectory": "build/web",
   "functions": {
     "api/*.js": {
