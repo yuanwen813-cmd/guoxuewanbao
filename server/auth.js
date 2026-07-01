@@ -13,7 +13,10 @@ function normalizePhone(phone) {
 }
 
 function isMockOtpEnabled() {
-  return process.env.NODE_ENV !== 'production' && Boolean(process.env.MOCK_OTP_CODE);
+  const enabled = ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.ENABLE_MOCK_OTP || '').toLowerCase(),
+  );
+  return enabled && Boolean(process.env.MOCK_OTP_CODE);
 }
 
 function mockAuthUserId(phone) {

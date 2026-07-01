@@ -16,8 +16,8 @@
 
 1. 在 Supabase Auth 中启用 Phone Provider。
 2. 配置短信服务商。
-3. 内测阶段如需 mock OTP，只能在非生产环境设置 `MOCK_OTP_CODE`。
-4. Vercel Production 环境必须禁用 `MOCK_OTP_CODE`。
+3. 内测阶段如需 mock OTP，需要同时设置 `ENABLE_MOCK_OTP=true` 和 `MOCK_OTP_CODE`。
+4. Vercel Production 正式上线前必须删除 `ENABLE_MOCK_OTP` 和 `MOCK_OTP_CODE`。
 
 ## 3. 初始化数据库
 
