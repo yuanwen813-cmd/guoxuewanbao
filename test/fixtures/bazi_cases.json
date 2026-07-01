@@ -1,0 +1,36 @@
+[
+  {
+    "caseId": "bazi-001",
+    "input": {
+      "year": 1990,
+      "month": 5,
+      "day": 15,
+      "hour": 12,
+      "gender": "male"
+    },
+    "expected": {
+      "yearPillar": "庚午",
+      "monthPillar": "辛巳",
+      "dayPillar": "庚戌",
+      "hourPillar": "壬午"
+    },
+    "notes": "1990年5月15日12时 男 - 参考排盘"
+  },
+  {
+    "caseId": "bazi-002",
+    "input": {
+      "year": 2000,
+      "month": 1,
+      "day": 1,
+      "hour": 0,
+      "gender": "female"
+    },
+    "expected": {
+      "yearPillar": "庚辰",
+      "monthPillar": "丙子",
+      "dayPillar": "甲寅",
+      "hourPillar": "甲子"
+    },
+    "notes": "2000年1月1日0时 女"
+  }
+]

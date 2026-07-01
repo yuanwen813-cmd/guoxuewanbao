@@ -1,0 +1,77 @@
+name: guoxueapp
+description: 国学万宝匣 - 国学占卜·命理·风水·通书 APP
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+  flutter: '>=3.16.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # state & routing
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+  go_router: ^13.0.0
+
+  # model & json
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+
+  # database
+  sqflite: ^2.3.2
+  sqflite_common_ffi: ^2.3.2
+  path_provider: ^2.1.1
+  path: ^1.8.3
+
+  # secure storage
+  flutter_secure_storage: ^9.0.0
+
+  # network
+  dio: ^5.4.0
+
+  # animation
+  flutter_animate: ^4.3.0
+
+  # sensors & device
+  sensors_plus: ^4.0.2
+  permission_handler: ^11.2.0
+
+  # audio
+  audioplayers: ^5.2.1
+
+  # ui & share
+  flutter_svg: ^2.0.9
+  share_plus: ^7.2.1
+  screenshot: ^2.1.0
+
+  # utils
+  crypto: ^3.0.3
+  uuid: ^4.2.2
+  intl: ^0.19.0
+
+  # yaml for prompt loading
+  yaml: ^3.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  build_runner: ^2.4.8
+  freezed: ^2.4.7
+  json_serializable: ^6.7.1
+  mocktail: ^1.0.1
+  very_good_analysis: ^5.1.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/prompts/
+    - assets/prompts/common/
+    - assets/data/
+    - assets/data/lots/
+    - assets/data/reference/
+    - assets/data/iching/
+    - assets/data/calendar/

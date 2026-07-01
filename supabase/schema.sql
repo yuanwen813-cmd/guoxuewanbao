@@ -1,0 +1,550 @@
+create extension if not exists pgcrypto;
+
+create table if not exists app_users (
+  id uuid primary key default gen_random_uuid(),
+  auth_user_id uuid unique not null,
+  phone text unique,
+  nickname text,
+  avatar_url text,
+  status text not null default 'active' check (status in ('active', 'disabled')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists wallets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid unique not null references app_users(id) on delete restrict,
+  balance_cents bigint not null default 0 check (balance_cents >= 0),
+  currency text not null default 'CNY',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists wallet_transactions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references app_users(id) on delete restrict,
+  wallet_id uuid not null references wallets(id) on delete restrict,
+  type text not null check (type in ('recharge', 'ai_debit', 'ai_refund', 'manual_adjust')),
+  amount_cents bigint not null,
+  balance_after_cents bigint not null,
+  currency text not null default 'CNY',
+  ref_type text check (ref_type is null or ref_type in ('recharge_order', 'ai_report_order', 'admin_adjust')),
+  ref_id text,
+  out_trade_no text,
+  note text,
+  created_at timestamptz not null default now(),
+  unique(ref_type, ref_id, type)
+);
+
+create table if not exists recharge_orders (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references app_users(id) on delete restrict,
+  out_trade_no text unique not null,
+  provider text not null check (provider in ('wechat', 'alipay')),
+  trade_type text not null check (trade_type in ('web_native', 'web_pc', 'qr', 'h5', 'app', 'mini_program')),
+  amount_cents bigint not null check (amount_cents >= 100),
+  currency text not null default 'CNY',
+  status text not null default 'pending' check (status in ('pending', 'paid', 'closed', 'failed', 'refunded')),
+  provider_trade_no text,
+  prepay_id text,
+  code_url text,
+  pay_url text,
+  raw_create_response jsonb,
+  paid_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists ai_report_orders (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references app_users(id) on delete restrict,
+  product_id text not null,
+  report_type text not null,
+  price_cents bigint not null check (price_cents >= 0),
+  currency text not null default 'CNY',
+  status text not null default 'pending' check (status in ('pending', 'generating', 'completed', 'failed', 'refunded')),
+  input_snapshot_json jsonb,
+  bazi_chart_json jsonb,
+  question_result_json jsonb,
+  prompt_snapshot text,
+  result_text text,
+  error_message text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists payment_notify_logs (
+  id uuid primary key default gen_random_uuid(),
+  provider text not null check (provider in ('wechat', 'alipay')),
+  out_trade_no text,
+  provider_trade_no text,
+  headers_json jsonb,
+  raw_body text,
+  parsed_json jsonb,
+  verified boolean not null default false,
+  handled boolean not null default false,
+  error_message text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists ai_call_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references app_users(id) on delete set null,
+  ai_report_order_id uuid references ai_report_orders(id) on delete set null,
+  provider text not null default 'deepseek',
+  model text,
+  request_tokens integer,
+  response_tokens integer,
+  success boolean,
+  error_message text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_wallet_transactions_user_time
+  on wallet_transactions(user_id, created_at desc);
+
+create index if not exists idx_recharge_orders_user_time
+  on recharge_orders(user_id, created_at desc);
+
+create index if not exists idx_ai_report_orders_user_time
+  on ai_report_orders(user_id, created_at desc);
+
+create or replace function touch_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_app_users_touch_updated_at on app_users;
+create trigger trg_app_users_touch_updated_at
+before update on app_users
+for each row execute function touch_updated_at();
+
+drop trigger if exists trg_wallets_touch_updated_at on wallets;
+create trigger trg_wallets_touch_updated_at
+before update on wallets
+for each row execute function touch_updated_at();
+
+drop trigger if exists trg_recharge_orders_touch_updated_at on recharge_orders;
+create trigger trg_recharge_orders_touch_updated_at
+before update on recharge_orders
+for each row execute function touch_updated_at();
+
+drop trigger if exists trg_ai_report_orders_touch_updated_at on ai_report_orders;
+create trigger trg_ai_report_orders_touch_updated_at
+before update on ai_report_orders
+for each row execute function touch_updated_at();
+
+create or replace function ensure_app_user(
+  p_auth_user_id uuid,
+  p_phone text
+) returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_user app_users%rowtype;
+  v_wallet wallets%rowtype;
+begin
+  insert into app_users(auth_user_id, phone)
+  values (p_auth_user_id, p_phone)
+  on conflict (auth_user_id) do update
+    set phone = coalesce(excluded.phone, app_users.phone)
+  returning * into v_user;
+
+  insert into wallets(user_id)
+  values (v_user.id)
+  on conflict (user_id) do update
+    set updated_at = wallets.updated_at
+  returning * into v_wallet;
+
+  return jsonb_build_object(
+    'user', to_jsonb(v_user),
+    'wallet', to_jsonb(v_wallet)
+  );
+end;
+$$;
+
+create or replace function create_recharge_order(
+  p_user_id uuid,
+  p_provider text,
+  p_trade_type text,
+  p_amount_cents bigint,
+  p_out_trade_no text
+) returns recharge_orders
+language plpgsql
+security definer
+as $$
+declare
+  v_order recharge_orders%rowtype;
+begin
+  insert into recharge_orders(
+    user_id,
+    provider,
+    trade_type,
+    amount_cents,
+    out_trade_no
+  )
+  values (
+    p_user_id,
+    p_provider,
+    p_trade_type,
+    p_amount_cents,
+    p_out_trade_no
+  )
+  returning * into v_order;
+  return v_order;
+end;
+$$;
+
+create or replace function mark_recharge_paid(
+  p_out_trade_no text,
+  p_provider_trade_no text,
+  p_amount_cents bigint,
+  p_notify_log_id uuid,
+  p_raw_payload jsonb
+) returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_order recharge_orders%rowtype;
+  v_wallet wallets%rowtype;
+  v_already_paid boolean := false;
+begin
+  select * into v_order
+  from recharge_orders
+  where out_trade_no = p_out_trade_no
+  for update;
+
+  if not found then
+    raise exception 'RECHARGE_ORDER_NOT_FOUND';
+  end if;
+
+  if v_order.amount_cents <> p_amount_cents then
+    raise exception 'RECHARGE_AMOUNT_MISMATCH';
+  end if;
+
+  if v_order.status = 'paid' then
+    v_already_paid := true;
+    select * into v_wallet from wallets where user_id = v_order.user_id;
+    return jsonb_build_object(
+      'order', to_jsonb(v_order),
+      'wallet', to_jsonb(v_wallet),
+      'already_paid', v_already_paid
+    );
+  end if;
+
+  select * into v_wallet
+  from wallets
+  where user_id = v_order.user_id
+  for update;
+
+  update recharge_orders
+  set status = 'paid',
+      provider_trade_no = p_provider_trade_no,
+      paid_at = now(),
+      updated_at = now()
+  where id = v_order.id
+  returning * into v_order;
+
+  update wallets
+  set balance_cents = balance_cents + v_order.amount_cents,
+      updated_at = now()
+  where id = v_wallet.id
+  returning * into v_wallet;
+
+  insert into wallet_transactions(
+    user_id,
+    wallet_id,
+    type,
+    amount_cents,
+    balance_after_cents,
+    currency,
+    ref_type,
+    ref_id,
+    out_trade_no,
+    note
+  )
+  values (
+    v_order.user_id,
+    v_wallet.id,
+    'recharge',
+    v_order.amount_cents,
+    v_wallet.balance_cents,
+    v_wallet.currency,
+    'recharge_order',
+    v_order.id::text,
+    v_order.out_trade_no,
+    '余额充值'
+  )
+  on conflict (ref_type, ref_id, type) do nothing;
+
+  if p_notify_log_id is not null then
+    update payment_notify_logs
+    set out_trade_no = v_order.out_trade_no,
+        provider_trade_no = p_provider_trade_no,
+        parsed_json = coalesce(parsed_json, '{}'::jsonb) || coalesce(p_raw_payload, '{}'::jsonb),
+        verified = true,
+        handled = true
+    where id = p_notify_log_id;
+  end if;
+
+  return jsonb_build_object(
+    'order', to_jsonb(v_order),
+    'wallet', to_jsonb(v_wallet),
+    'already_paid', v_already_paid
+  );
+end;
+$$;
+
+create or replace function create_ai_report_debit(
+  p_user_id uuid,
+  p_product_id text,
+  p_report_type text,
+  p_price_cents bigint,
+  p_input_snapshot_json jsonb,
+  p_bazi_chart_json jsonb,
+  p_question_result_json jsonb,
+  p_prompt_snapshot text
+) returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_wallet wallets%rowtype;
+  v_order ai_report_orders%rowtype;
+begin
+  select * into v_wallet
+  from wallets
+  where user_id = p_user_id
+  for update;
+
+  if not found then
+    raise exception 'WALLET_NOT_FOUND';
+  end if;
+
+  if v_wallet.balance_cents < p_price_cents then
+    raise exception 'INSUFFICIENT_BALANCE';
+  end if;
+
+  insert into ai_report_orders(
+    user_id,
+    product_id,
+    report_type,
+    price_cents,
+    status,
+    input_snapshot_json,
+    bazi_chart_json,
+    question_result_json,
+    prompt_snapshot
+  )
+  values (
+    p_user_id,
+    p_product_id,
+    p_report_type,
+    p_price_cents,
+    'generating',
+    coalesce(p_input_snapshot_json, '{}'::jsonb),
+    coalesce(p_bazi_chart_json, '{}'::jsonb),
+    coalesce(p_question_result_json, '{}'::jsonb),
+    p_prompt_snapshot
+  )
+  returning * into v_order;
+
+  update wallets
+  set balance_cents = balance_cents - p_price_cents,
+      updated_at = now()
+  where id = v_wallet.id
+  returning * into v_wallet;
+
+  insert into wallet_transactions(
+    user_id,
+    wallet_id,
+    type,
+    amount_cents,
+    balance_after_cents,
+    currency,
+    ref_type,
+    ref_id,
+    note
+  )
+  values (
+    p_user_id,
+    v_wallet.id,
+    'ai_debit',
+    -p_price_cents,
+    v_wallet.balance_cents,
+    v_wallet.currency,
+    'ai_report_order',
+    v_order.id::text,
+    'AI 解析扣费'
+  );
+
+  return jsonb_build_object(
+    'order', to_jsonb(v_order),
+    'wallet', to_jsonb(v_wallet)
+  );
+end;
+$$;
+
+create or replace function complete_ai_report_order(
+  p_order_id uuid,
+  p_result_text text,
+  p_model text,
+  p_request_tokens integer,
+  p_response_tokens integer
+) returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_order ai_report_orders%rowtype;
+  v_wallet wallets%rowtype;
+begin
+  select * into v_order
+  from ai_report_orders
+  where id = p_order_id
+  for update;
+
+  if not found then
+    raise exception 'AI_REPORT_ORDER_NOT_FOUND';
+  end if;
+
+  update ai_report_orders
+  set status = 'completed',
+      result_text = p_result_text,
+      updated_at = now()
+  where id = p_order_id
+  returning * into v_order;
+
+  insert into ai_call_logs(
+    user_id,
+    ai_report_order_id,
+    provider,
+    model,
+    request_tokens,
+    response_tokens,
+    success
+  )
+  values (
+    v_order.user_id,
+    v_order.id,
+    'deepseek',
+    p_model,
+    p_request_tokens,
+    p_response_tokens,
+    true
+  );
+
+  select * into v_wallet from wallets where user_id = v_order.user_id;
+
+  return jsonb_build_object(
+    'order', to_jsonb(v_order),
+    'wallet', to_jsonb(v_wallet)
+  );
+end;
+$$;
+
+create or replace function refund_ai_report_order(
+  p_order_id uuid,
+  p_error_message text,
+  p_model text
+) returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_order ai_report_orders%rowtype;
+  v_wallet wallets%rowtype;
+  v_already_refunded boolean := false;
+begin
+  select * into v_order
+  from ai_report_orders
+  where id = p_order_id
+  for update;
+
+  if not found then
+    raise exception 'AI_REPORT_ORDER_NOT_FOUND';
+  end if;
+
+  if v_order.status in ('failed', 'refunded') then
+    v_already_refunded := true;
+    select * into v_wallet from wallets where user_id = v_order.user_id;
+    return jsonb_build_object(
+      'order', to_jsonb(v_order),
+      'wallet', to_jsonb(v_wallet),
+      'already_refunded', v_already_refunded
+    );
+  end if;
+
+  select * into v_wallet
+  from wallets
+  where user_id = v_order.user_id
+  for update;
+
+  update wallets
+  set balance_cents = balance_cents + v_order.price_cents,
+      updated_at = now()
+  where id = v_wallet.id
+  returning * into v_wallet;
+
+  update ai_report_orders
+  set status = 'refunded',
+      error_message = p_error_message,
+      updated_at = now()
+  where id = p_order_id
+  returning * into v_order;
+
+  insert into wallet_transactions(
+    user_id,
+    wallet_id,
+    type,
+    amount_cents,
+    balance_after_cents,
+    currency,
+    ref_type,
+    ref_id,
+    note
+  )
+  values (
+    v_order.user_id,
+    v_wallet.id,
+    'ai_refund',
+    v_order.price_cents,
+    v_wallet.balance_cents,
+    v_wallet.currency,
+    'ai_report_order',
+    v_order.id::text,
+    'AI 解析失败自动退款'
+  )
+  on conflict (ref_type, ref_id, type) do nothing;
+
+  insert into ai_call_logs(
+    user_id,
+    ai_report_order_id,
+    provider,
+    model,
+    success,
+    error_message
+  )
+  values (
+    v_order.user_id,
+    v_order.id,
+    'deepseek',
+    p_model,
+    false,
+    p_error_message
+  );
+
+  return jsonb_build_object(
+    'order', to_jsonb(v_order),
+    'wallet', to_jsonb(v_wallet),
+    'already_refunded', v_already_refunded
+  );
+end;
+$$;

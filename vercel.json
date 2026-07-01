@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "buildCommand": "flutter build web --release --dart-define=GUOXUE_API_BASE_URL=$PUBLIC_API_URL",
+  "outputDirectory": "build/web",
+  "functions": {
+    "api/*.js": {
+      "runtime": "nodejs20.x"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

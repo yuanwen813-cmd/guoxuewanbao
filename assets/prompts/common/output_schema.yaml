@@ -1,0 +1,10 @@
+# 通用输出格式约束
+output_schema:
+  format: json
+  required_fields:
+    classical: string    # 国学术语版
+    vernacular: string   # 通俗白话版
+    advice: string       # 建议
+  optional_fields:
+    riskNote: string     # 风险提示
+    tags: array<string>  # 标签

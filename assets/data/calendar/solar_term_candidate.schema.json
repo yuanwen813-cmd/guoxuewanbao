@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "solar-term-candidate-data-v0_26",
+  "description": "节气候选数据 schema v0.26 — 仅用于沙箱验证，不接入 CalendarProvider",
+  "required": ["schemaVersion", "productionReady", "publicExposure", "calendarProviderIntegration", "sourceName", "sourceType", "license", "timezone", "coverageStartYear", "coverageEndYear", "years", "usesAiGeneratedData", "requiresNetwork", "usesFixedDateApproximation"],
+  "constraints": {
+    "productionReady": { "type": "boolean", "mustBe": false },
+    "publicExposure": { "type": "boolean", "mustBe": false },
+    "calendarProviderIntegration": { "type": "boolean", "mustBe": false },
+    "usesAiGeneratedData": { "type": "boolean", "mustBe": false },
+    "requiresNetwork": { "type": "boolean", "mustBe": false },
+    "usesFixedDateApproximation": { "type": "boolean", "mustBe": false },
+    "timezone": { "type": "string", "nonEmpty": true },
+    "coverageStartYear": { "type": "integer", "min": 1900 },
+    "coverageEndYear": { "type": "integer", "max": 2100 },
+    "years": [{
+      "year": "integer",
+      "terms": [{
+        "name": "string (must be in 24 solar term names)",
+        "date": "string (YYYY-MM-DD)",
+        "time": "string (HH:mm)",
+        "timezone": "string (non-empty)",
+        "sequenceIndex": "integer (1-24)"
+      }],
+      "termsCount": 24
+    }],
+    "validTermNames": ["立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至","小寒","大寒"]
+  }
+}

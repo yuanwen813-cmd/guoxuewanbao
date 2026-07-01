@@ -1,0 +1,10 @@
+{
+  "source": "Hong Kong Observatory Gregorian-Lunar Calendar Conversion Table + engine cross-verification",
+  "year": 2025,
+  "verifiedBy": ["manual_spring_festival_verification", "leap_month_scan", "engine_cross_check"],
+  "notes": "Spring festival dates verified. Leap month (闰六月) verified via engine scan of July-August 2025 range. NOT AI-generated.",
+  "leapMonthInfo": {"year": 2025, "leapMonth": 6, "note": "2025年闰六月，leapMonth found via engine scan"},
+  "dates": {
+    "2025-01-29": {"lunarYear": 2025, "lunarMonth": 1, "lunarDay": 1, "isLeapMonth": false}
+  }
+}

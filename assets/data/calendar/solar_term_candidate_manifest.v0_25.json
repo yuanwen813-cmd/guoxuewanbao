@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "solar-term-candidate-manifest-v0_25",
+  "productionReady": false,
+  "publicExposure": false,
+  "calendarProviderIntegration": false,
+  "sourceReviewRequired": true,
+  "preparationRequired": true,
+  "landingReviewRequired": true,
+  "candidateDataReady": false,
+  "notes": [
+    "v0.25 only reviews landing workflow",
+    "solar term capability is not publicly enabled",
+    "do not import into CalendarProvider",
+    "this is a candidate manifest placeholder"
+  ]
+}

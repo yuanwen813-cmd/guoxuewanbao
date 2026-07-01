@@ -1,0 +1,13 @@
+{
+  "description": "六十四卦关系——互卦、综卦、错卦、交互卦",
+  "relations": {
+    "1": {"mutual":44, "reverse":1, "opposite":2, "mixed":1},
+    "2": {"mutual":23, "reverse":2, "opposite":1, "mixed":2},
+    "3": {"mutual":23, "reverse":4, "opposite":50, "mixed":5},
+    "4": {"mutual":24, "reverse":3, "opposite":49, "mixed":6},
+    "5": {"mutual":38, "reverse":6, "opposite":35, "mixed":3},
+    "6": {"mutual":37, "reverse":5, "opposite":36, "mixed":4},
+    "7": {"mutual":24, "reverse":8, "opposite":13, "mixed":9},
+    "8": {"mutual":23, "reverse":7, "opposite":14, "mixed":10}
+  }
+}

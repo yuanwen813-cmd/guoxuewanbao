@@ -1,0 +1,41 @@
+[
+  {
+    "caseId": "xiaoliuren-001",
+    "input": {
+      "month": 3,
+      "day": 12,
+      "hourBranch": "午"
+    },
+    "expected": {
+      "position": "大安",
+      "wuxing": "木"
+    },
+    "notes": "基础小六壬案例 - 3月12日午时"
+  },
+  {
+    "caseId": "xiaoliuren-002",
+    "input": {
+      "month": 1,
+      "day": 1,
+      "hourBranch": "子"
+    },
+    "expected": {
+      "position": "大安",
+      "wuxing": "木"
+    },
+    "notes": "正月初一子时 - 应为大安"
+  },
+  {
+    "caseId": "xiaoliuren-003",
+    "input": {
+      "month": 7,
+      "day": 15,
+      "hourBranch": "申"
+    },
+    "expected": {
+      "position": "速喜",
+      "wuxing": "火"
+    },
+    "notes": "七月十五申时"
+  }
+]

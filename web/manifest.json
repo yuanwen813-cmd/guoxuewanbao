@@ -1,0 +1,35 @@
+{
+    "name": "国学万宝匣",
+    "short_name": "国学万宝匣",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#F3E4C6",
+    "theme_color": "#07584F",
+    "description": "国学占卜、命理、风水、通书 APP。",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

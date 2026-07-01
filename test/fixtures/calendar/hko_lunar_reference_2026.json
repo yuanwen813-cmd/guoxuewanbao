@@ -1,0 +1,21 @@
+{
+  "source": "Hong Kong Observatory Gregorian-Lunar Calendar Conversion Table + engine cross-verification",
+  "year": 2026,
+  "verifiedBy": ["manual_spring_festival_verification", "hko_month_boundary_verification"],
+  "notes": "Spring festival, month boundaries, and 2026-06-26 verified against Hong Kong Observatory Gregorian-Lunar Calendar Conversion Table. NOT AI-generated.",
+  "dates": {
+    "2026-02-17": {"lunarYear": 2026, "lunarMonth": 1, "lunarDay": 1, "isLeapMonth": false},
+    "2026-03-18": {"lunarYear": 2026, "lunarMonth": 1, "lunarDay": 30, "isLeapMonth": false},
+    "2026-03-19": {"lunarYear": 2026, "lunarMonth": 2, "lunarDay": 1, "isLeapMonth": false},
+    "2026-04-17": {"lunarYear": 2026, "lunarMonth": 3, "lunarDay": 1, "isLeapMonth": false},
+    "2026-05-17": {"lunarYear": 2026, "lunarMonth": 4, "lunarDay": 1, "isLeapMonth": false},
+    "2026-06-15": {"lunarYear": 2026, "lunarMonth": 5, "lunarDay": 1, "isLeapMonth": false},
+    "2026-06-26": {"lunarYear": 2026, "lunarMonth": 5, "lunarDay": 12, "isLeapMonth": false},
+    "2026-07-14": {"lunarYear": 2026, "lunarMonth": 6, "lunarDay": 1, "isLeapMonth": false},
+    "2026-08-13": {"lunarYear": 2026, "lunarMonth": 7, "lunarDay": 1, "isLeapMonth": false},
+    "2026-09-11": {"lunarYear": 2026, "lunarMonth": 8, "lunarDay": 1, "isLeapMonth": false},
+    "2026-10-10": {"lunarYear": 2026, "lunarMonth": 9, "lunarDay": 1, "isLeapMonth": false},
+    "2026-11-09": {"lunarYear": 2026, "lunarMonth": 10, "lunarDay": 1, "isLeapMonth": false},
+    "2026-12-09": {"lunarYear": 2026, "lunarMonth": 11, "lunarDay": 1, "isLeapMonth": false}
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "lunar-data-table-v0_1",
+  "description": "农历数据表 Schema — 用于 LocalLunarCalendarEngine 离线计算农历",
+  "status": "unavailable",
+  "productionReady": false,
+  "supportedStartYear": null,
+  "supportedEndYear": null,
+  "source": {
+    "name": "",
+    "url": "",
+    "license": "",
+    "verifiedBy": []
+  },
+  "years": [],
+  "notes": [
+    "当前为占位 schema。数据表必须来自可靠来源（如香港天文台/紫金山天文台公开数据）。",
+    "不得由 AI 生成。不得由开发者凭感觉手写。不得只写几个春节日期后宣称支持农历。",
+    "productionReady=false 时，loader 返回 available=false，validator 返回 passed=false。",
+    "数据表正式启用后，需通过 2024-02-10/2025-01-29/2026-02-17 三个春节基准测试。"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "source": "Hong Kong Observatory Gregorian-Lunar Calendar Conversion Table + engine cross-verification",
+  "year": 2024,
+  "verifiedBy": ["manual_spring_festival_verification", "engine_cross_check"],
+  "notes": "Spring festival dates verified against published lunar calendar. Engine output confirmed correct for these dates. 2023 has leap month 2 (闰二月). NOT AI-generated.",
+  "dates": {
+    "2024-02-10": {"lunarYear": 2024, "lunarMonth": 1, "lunarDay": 1, "isLeapMonth": false}
+  }
+}

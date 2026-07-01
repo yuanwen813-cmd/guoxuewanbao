@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "lunar-data-table-v0_1",
+  "productionReady": false,
+  "status": "candidate_placeholder",
+  "supportedStartYear": null,
+  "supportedEndYear": null,
+  "source": {
+    "name": "",
+    "url": "",
+    "license": "",
+    "verifiedBy": []
+  },
+  "years": []
+}

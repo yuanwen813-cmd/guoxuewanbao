@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "solar-term-candidate-data-v0_26",
+  "productionReady": false,
+  "publicExposure": false,
+  "calendarProviderIntegration": false,
+  "candidateDataReady": false,
+  "sourceName": "placeholder",
+  "sourceType": "placeholder",
+  "license": "placeholder — not yet selected",
+  "timezone": "Asia/Shanghai",
+  "coverageStartYear": null,
+  "coverageEndYear": null,
+  "years": [],
+  "usesAiGeneratedData": false,
+  "requiresNetwork": false,
+  "usesFixedDateApproximation": false,
+  "notes": [
+    "v0.26 sandbox placeholder only",
+    "not connected to CalendarProvider",
+    "not used for page or share display",
+    "candidateDataReady=false: no real data loaded"
+  ]
+}
