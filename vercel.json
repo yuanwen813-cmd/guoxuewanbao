@@ -2,11 +2,6 @@
   "version": 2,
   "buildCommand": "bash deploy/vercel_build.sh",
   "outputDirectory": "build/web",
-  "functions": {
-    "api/*.js": {
-      "runtime": "nodejs20.x"
-    }
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",
