@@ -3,7 +3,7 @@ set -euo pipefail
 
 FLUTTER_DIR="/tmp/flutter"
 FLUTTER_REPO="https://github.com/flutter/flutter.git"
-FLUTTER_CHANNEL="${FLUTTER_CHANNEL:-stable}"
+FLUTTER_VERSION="${FLUTTER_VERSION:-3.22.0}"
 API_BASE_URL="${PUBLIC_API_URL:-}"
 
 if [ -z "$API_BASE_URL" ] && [ -n "${VERCEL_URL:-}" ]; then
@@ -17,7 +17,7 @@ if [ -z "$API_BASE_URL" ]; then
 fi
 
 if [ ! -d "$FLUTTER_DIR/.git" ]; then
-  git clone "$FLUTTER_REPO" -b "$FLUTTER_CHANNEL" --depth 1 "$FLUTTER_DIR"
+  git clone "$FLUTTER_REPO" -b "$FLUTTER_VERSION" --depth 1 "$FLUTTER_DIR"
 fi
 
 export PATH="$PATH:$FLUTTER_DIR/bin"
