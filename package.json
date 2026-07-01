@@ -4,7 +4,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "check:api": "node --check api/health.js && node --check api/auth-send-code.js && node --check api/auth-verify-code.js && node --check api/auth-me.js && node --check api/wallet.js && node --check api/wallet-transactions.js && node --check api/recharge-create.js && node --check api/recharge-status.js && node --check api/pay-wechat-create.js && node --check api/pay-alipay-create.js && node --check api/pay-wechat-notify.js && node --check api/pay-alipay-notify.js && node --check api/ai-report-generate.js && node --check api/ai-report-detail.js"
+    "check:api": "node --check api/index.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4"
