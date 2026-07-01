@@ -2,14 +2,34 @@ const crypto = require('crypto');
 const { getSupabaseAnonClient, getSupabaseServiceClient } = require('./supabaseClient');
 const { HttpError } = require('./response');
 
-const phonePattern = /^1[3-9]\d{9}$/;
+const mainlandMobilePattern = /^1[3-9]\d{9}$/;
 
 function normalizePhone(phone) {
-  const value = String(phone || '').trim();
-  if (!phonePattern.test(value)) {
+  const raw = String(phone || '').trim();
+  let value = raw.replace(/[\s\-()]/g, '');
+  if (value.startsWith('+86')) {
+    value = value.slice(3);
+  } else if (value.startsWith('0086')) {
+    value = value.slice(4);
+  } else if (value.startsWith('86') && value.length === 13) {
+    value = value.slice(2);
+  }
+  if (!mainlandMobilePattern.test(value)) {
     throw new HttpError(400, '请输入有效的中国大陆手机号码');
   }
   return value;
+}
+
+function normalizePhoneOrNull(phone) {
+  try {
+    return normalizePhone(phone);
+  } catch (_) {
+    return null;
+  }
+}
+
+function toSupabasePhone(phone) {
+  return `+86${normalizePhone(phone)}`;
 }
 
 function isMockOtpEnabled() {
@@ -61,7 +81,9 @@ async function sendPhoneCode(phone) {
     return { ok: true, mock: true };
   }
   const supabase = getSupabaseAnonClient();
-  const { error } = await supabase.auth.signInWithOtp({ phone: normalized });
+  const { error } = await supabase.auth.signInWithOtp({
+    phone: toSupabasePhone(normalized),
+  });
   if (error) {
     throw new HttpError(400, '验证码发送失败，请稍后再试');
   }
@@ -87,7 +109,7 @@ async function verifyPhoneCode(phone, code) {
 
   const supabase = getSupabaseAnonClient();
   const { data, error } = await supabase.auth.verifyOtp({
-    phone: normalized,
+    phone: toSupabasePhone(normalized),
     token,
     type: 'sms',
   });
@@ -143,7 +165,10 @@ function mapBusinessPayload(payload) {
 }
 
 async function ensureBusinessUser(authUser) {
-  const phone = authUser.phone || authUser.user_metadata?.phone || null;
+  const phone =
+    normalizePhoneOrNull(authUser.phone) ||
+    normalizePhoneOrNull(authUser.user_metadata?.phone) ||
+    null;
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase.rpc('ensure_app_user', {
     p_auth_user_id: authUser.id,
@@ -169,6 +194,7 @@ module.exports = {
   ensureBusinessUser,
   getAuthRuntimeStatus,
   normalizePhone,
+  toSupabasePhone,
   requireUser,
   sendPhoneCode,
   verifyPhoneCode,
