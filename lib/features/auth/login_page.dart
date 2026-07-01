@@ -69,12 +69,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(11),
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'[0-9+\-\s()]'),
+                    ),
+                    LengthLimitingTextInputFormatter(20),
                   ],
                   decoration: const InputDecoration(
                     labelText: '手机号码',
-                    hintText: '请输入 11 位手机号',
+                    hintText: '支持 11 位手机号或 +86 手机号',
                   ),
                 ),
                 const SizedBox(height: 12),
