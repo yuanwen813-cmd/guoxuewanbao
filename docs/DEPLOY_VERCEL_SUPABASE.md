@@ -12,12 +12,14 @@
 2. 记录 `SUPABASE_URL`、`SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`。
 3. `SUPABASE_SERVICE_ROLE_KEY` 只能配置在 Vercel Serverless 环境变量中，不能进入 Flutter 前端。
 
-## 2. 配置 Phone Auth
+## 2. 配置手机号短信登录
 
-1. 在 Supabase Auth 中启用 Phone Provider。
-2. 配置短信服务商。
-3. 内测阶段如需 mock OTP，需要同时设置 `ENABLE_MOCK_OTP=true` 和 `MOCK_OTP_CODE`。
-4. Vercel Production 正式上线前必须删除 `ENABLE_MOCK_OTP` 和 `MOCK_OTP_CODE`。
+1. 当前生产短信登录使用阿里云短信服务 API 发送验证码。
+2. 在阿里云短信服务中完成签名和验证码模板审核。
+3. Vercel 中配置 `ALIYUN_ACCESS_KEY_ID`、`ALIYUN_ACCESS_KEY_SECRET`、`ALIYUN_SMS_SIGN_NAME`、`ALIYUN_SMS_TEMPLATE_CODE`。
+4. 验证码只保存哈希，不在数据库中保存明文。
+5. 内测阶段如需 mock OTP，需要同时设置 `ENABLE_MOCK_OTP=true` 和 `MOCK_OTP_CODE`。
+6. Vercel Production 正式上线前必须删除 `ENABLE_MOCK_OTP` 和 `MOCK_OTP_CODE`。
 
 ## 3. 初始化数据库
 
