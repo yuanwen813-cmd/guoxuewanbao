@@ -1,5 +1,6 @@
 const crypto = require('crypto');
-const { getSupabaseAnonClient, getSupabaseServiceClient } = require('./supabaseClient');
+const { getAliyunSmsStatus, sendAliyunSmsCode } = require('./aliyunSms');
+const { getSupabaseServiceClient } = require('./supabaseClient');
 const { HttpError } = require('./response');
 
 const mainlandMobilePattern = /^1[3-9]\d{9}$/;
@@ -39,6 +40,102 @@ function isMockOtpEnabled() {
   return enabled && Boolean(process.env.MOCK_OTP_CODE);
 }
 
+function smsCodeTtlMs() {
+  return Math.max(1, Number(process.env.SMS_CODE_TTL_MINUTES || 5)) * 60 * 1000;
+}
+
+function smsMinIntervalMs() {
+  return Math.max(10, Number(process.env.SMS_CODE_MIN_INTERVAL_SECONDS || 60)) * 1000;
+}
+
+function smsMaxPerHour() {
+  return Math.max(1, Number(process.env.SMS_CODE_MAX_PER_HOUR || 5));
+}
+
+function authSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new HttpError(500, '服务端缺少环境变量：JWT_SECRET');
+  return secret;
+}
+
+function mockAuthUserId(phone) {
+  const hex = crypto
+    .createHash('sha256')
+    .update(`guoxueapp:${normalizePhone(phone)}`)
+    .digest('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function codeHash(phone, code) {
+  return crypto
+    .createHmac('sha256', authSecret())
+    .update(`${normalizePhone(phone)}:${String(code || '').trim()}`)
+    .digest('hex');
+}
+
+function newSmsCode() {
+  return crypto.randomInt(0, 1000000).toString().padStart(6, '0');
+}
+
+function base64UrlEncode(value) {
+  return Buffer.from(value)
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function base64UrlDecode(value) {
+  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+  return Buffer.from(normalized, 'base64').toString('utf8');
+}
+
+function createAppAuthToken(phone) {
+  const normalized = normalizePhone(phone);
+  const payload = {
+    typ: 'phone_login',
+    sub: mockAuthUserId(normalized),
+    phone: normalized,
+    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
+  };
+  const encoded = base64UrlEncode(JSON.stringify(payload));
+  const signature = crypto
+    .createHmac('sha256', authSecret())
+    .update(encoded)
+    .digest('base64url');
+  return `app:${encoded}.${signature}`;
+}
+
+function readAppAuthToken(token) {
+  if (!String(token || '').startsWith('app:')) return null;
+  try {
+    const raw = String(token).slice(4);
+    const [encoded, signature] = raw.split('.');
+    if (!encoded || !signature) return null;
+    const expected = crypto
+      .createHmac('sha256', authSecret())
+      .update(encoded)
+      .digest('base64url');
+    const actualBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expected);
+    if (
+      actualBuffer.length !== expectedBuffer.length ||
+      !crypto.timingSafeEqual(actualBuffer, expectedBuffer)
+    ) {
+      return null;
+    }
+    const payload = JSON.parse(base64UrlDecode(encoded));
+    if (payload.typ !== 'phone_login' || !payload.sub || !payload.phone) return null;
+    if (Number(payload.exp || 0) < Math.floor(Date.now() / 1000)) return null;
+    return {
+      id: payload.sub,
+      phone: normalizePhone(payload.phone),
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 function getAuthRuntimeStatus() {
   const supabaseUrl = process.env.SUPABASE_URL || '';
   let supabaseHost = '';
@@ -61,18 +158,58 @@ function getAuthRuntimeStatus() {
     hasMockOtpCode: Boolean(process.env.MOCK_OTP_CODE),
     nodeEnv: process.env.NODE_ENV || '',
     vercelEnv: process.env.VERCEL_ENV || '',
+    hasJwtSecret: Boolean(process.env.JWT_SECRET),
     hasSupabaseUrl: Boolean(supabaseUrl),
     supabaseHost,
     supabaseUrlValid,
     supabaseUrlHasRestPath,
     hasSupabaseAnonKey: Boolean(process.env.SUPABASE_ANON_KEY),
     hasSupabaseServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    ...getAliyunSmsStatus(),
   };
 }
 
-function mockAuthUserId(phone) {
-  const hex = crypto.createHash('sha256').update(`guoxueapp:${phone}`).digest('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+function mapBusinessPayload(payload) {
+  return {
+    user: {
+      id: payload.user.id,
+      phone: payload.user.phone,
+      nickname: payload.user.nickname,
+      avatarUrl: payload.user.avatar_url,
+      status: payload.user.status,
+    },
+    wallet: {
+      balanceCents: Number(payload.wallet.balance_cents || 0),
+      currency: payload.wallet.currency || 'CNY',
+      updatedAt: payload.wallet.updated_at,
+      transactions: [],
+    },
+  };
+}
+
+async function assertSmsRateLimit(supabase, phone) {
+  const now = Date.now();
+  const recentSince = new Date(now - smsMinIntervalMs()).toISOString();
+  const hourSince = new Date(now - 60 * 60 * 1000).toISOString();
+  const { data: recent, error: recentError } = await supabase
+    .from('sms_login_codes')
+    .select('id')
+    .eq('phone', phone)
+    .gte('created_at', recentSince)
+    .limit(1);
+  if (recentError) throw new HttpError(500, '短信发送频率检查失败', recentError.message);
+  if ((recent || []).length > 0) {
+    throw new HttpError(429, '验证码发送过于频繁，请稍后再试');
+  }
+  const { count, error: countError } = await supabase
+    .from('sms_login_codes')
+    .select('id', { count: 'exact', head: true })
+    .eq('phone', phone)
+    .gte('created_at', hourSince);
+  if (countError) throw new HttpError(500, '短信发送频率检查失败', countError.message);
+  if (Number(count || 0) >= smsMaxPerHour()) {
+    throw new HttpError(429, '验证码发送次数过多，请稍后再试');
+  }
 }
 
 async function sendPhoneCode(phone) {
@@ -80,12 +217,21 @@ async function sendPhoneCode(phone) {
   if (isMockOtpEnabled()) {
     return { ok: true, mock: true };
   }
-  const supabase = getSupabaseAnonClient();
-  const { error } = await supabase.auth.signInWithOtp({
-    phone: toSupabasePhone(normalized),
+  const supabase = getSupabaseServiceClient();
+  await assertSmsRateLimit(supabase, normalized);
+  const code = newSmsCode();
+  const sms = await sendAliyunSmsCode({ phone: normalized, code });
+  const expiresAt = new Date(Date.now() + smsCodeTtlMs()).toISOString();
+  const { error } = await supabase.from('sms_login_codes').insert({
+    phone: normalized,
+    code_hash: codeHash(normalized, code),
+    provider: 'aliyun',
+    provider_request_id: sms.requestId,
+    provider_biz_id: sms.bizId,
+    expires_at: expiresAt,
   });
   if (error) {
-    throw new HttpError(400, '验证码发送失败，请稍后再试');
+    throw new HttpError(500, '短信验证码记录保存失败，请稍后再试', error.message);
   }
   return { ok: true };
 }
@@ -102,23 +248,54 @@ async function verifyPhoneCode(phone, code) {
     };
     const business = await ensureBusinessUser(authUser);
     return {
-      token: `mock:${normalized}`,
+      token: createAppAuthToken(normalized),
       user: business.user,
     };
   }
 
-  const supabase = getSupabaseAnonClient();
-  const { data, error } = await supabase.auth.verifyOtp({
-    phone: toSupabasePhone(normalized),
-    token,
-    type: 'sms',
-  });
-  if (error || !data?.session?.access_token || !data?.user) {
-    throw new HttpError(401, '验证码校验失败或已过期');
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from('sms_login_codes')
+    .select('*')
+    .eq('phone', normalized)
+    .is('consumed_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new HttpError(500, '验证码校验失败，请稍后再试', error.message);
+  if (!data) throw new HttpError(401, '验证码错误或已过期');
+  if (Number(data.attempts || 0) >= 5) {
+    throw new HttpError(429, '验证码错误次数过多，请重新获取');
   }
-  const business = await ensureBusinessUser(data.user);
+
+  const expected = Buffer.from(data.code_hash || '');
+  const actual = Buffer.from(codeHash(normalized, token));
+  const ok =
+    expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+  if (!ok) {
+    await supabase
+      .from('sms_login_codes')
+      .update({ attempts: Number(data.attempts || 0) + 1 })
+      .eq('id', data.id);
+    throw new HttpError(401, '验证码错误或已过期');
+  }
+
+  await supabase
+    .from('sms_login_codes')
+    .update({
+      consumed_at: new Date().toISOString(),
+      attempts: Number(data.attempts || 0) + 1,
+    })
+    .eq('id', data.id);
+
+  const authUser = {
+    id: mockAuthUserId(normalized),
+    phone: normalized,
+  };
+  const business = await ensureBusinessUser(authUser);
   return {
-    token: data.session.access_token,
+    token: createAppAuthToken(normalized),
     user: business.user,
   };
 }
@@ -138,30 +315,9 @@ async function getAuthUserFromToken(token) {
       phone,
     };
   }
-  const supabase = getSupabaseServiceClient();
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) {
-    throw new HttpError(401, '登录状态已失效，请重新登录');
-  }
-  return data.user;
-}
-
-function mapBusinessPayload(payload) {
-  return {
-    user: {
-      id: payload.user.id,
-      phone: payload.user.phone,
-      nickname: payload.user.nickname,
-      avatarUrl: payload.user.avatar_url,
-      status: payload.user.status,
-    },
-    wallet: {
-      balanceCents: Number(payload.wallet.balance_cents || 0),
-      currency: payload.wallet.currency || 'CNY',
-      updatedAt: payload.wallet.updated_at,
-      transactions: [],
-    },
-  };
+  const appUser = readAppAuthToken(token);
+  if (appUser) return appUser;
+  throw new HttpError(401, '登录状态已失效，请重新登录');
 }
 
 async function ensureBusinessUser(authUser) {
@@ -191,11 +347,12 @@ async function requireUser(req) {
 }
 
 module.exports = {
+  createAppAuthToken,
   ensureBusinessUser,
   getAuthRuntimeStatus,
   normalizePhone,
-  toSupabasePhone,
   requireUser,
   sendPhoneCode,
+  toSupabasePhone,
   verifyPhoneCode,
 };
