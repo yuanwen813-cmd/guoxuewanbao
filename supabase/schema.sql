@@ -20,6 +20,19 @@ create table if not exists wallets (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists sms_login_codes (
+  id uuid primary key default gen_random_uuid(),
+  phone text not null,
+  code_hash text not null,
+  provider text not null default 'aliyun',
+  provider_request_id text,
+  provider_biz_id text,
+  expires_at timestamptz not null,
+  consumed_at timestamptz,
+  attempts integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists wallet_transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references app_users(id) on delete restrict,
@@ -108,6 +121,13 @@ create index if not exists idx_recharge_orders_user_time
 
 create index if not exists idx_ai_report_orders_user_time
   on ai_report_orders(user_id, created_at desc);
+
+create index if not exists idx_sms_login_codes_phone_time
+  on sms_login_codes(phone, created_at desc);
+
+create index if not exists idx_sms_login_codes_active
+  on sms_login_codes(phone, expires_at desc)
+  where consumed_at is null;
 
 create or replace function touch_updated_at()
 returns trigger
