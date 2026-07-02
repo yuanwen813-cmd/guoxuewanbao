@@ -4,9 +4,11 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "check:api": "node --check api/index.js"
+    "check:api": "node --check api/index.js && node --check server/auth.js && node --check server/aliyunSms.js"
   },
   "dependencies": {
+    "@alicloud/dysmsapi20170525": "^4.6.0",
+    "@alicloud/openapi-client": "^0.4.15",
     "@supabase/supabase-js": "^2.45.4"
   },
   "engines": {
