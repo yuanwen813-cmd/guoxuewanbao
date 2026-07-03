@@ -1,4 +1,5 @@
 const { generateAiReport, getAiReportDetail } = require('../server/aiReportService');
+const { getAlipayRuntimeStatus } = require('../server/alipay');
 const {
   getAuthRuntimeStatus,
   requireUser,
@@ -58,6 +59,13 @@ const routes = {
     sendJson(res, 200, {
       ok: true,
       auth: getAuthRuntimeStatus(),
+    });
+  }),
+
+  'payment-debug': handleApi(['GET'], async (_req, res) => {
+    sendJson(res, 200, {
+      ok: true,
+      alipay: getAlipayRuntimeStatus(),
     });
   }),
 
@@ -159,8 +167,15 @@ const routes = {
 
   'pay-wechat-notify': handleApi(['POST'], async (req, res) => {
     const rawBody = await readRawBody(req);
-    await handleWechatNotify({ headers: req.headers || {}, rawBody });
-    sendJson(res, 200, { code: 'SUCCESS', message: '成功' });
+    try {
+      await handleWechatNotify({ headers: req.headers || {}, rawBody });
+      sendJson(res, 200, { code: 'SUCCESS', message: '成功' });
+    } catch (error) {
+      sendJson(res, 500, {
+        code: 'FAIL',
+        message: error.message || '支付通知处理失败',
+      });
+    }
   }),
 
   'pay-alipay-create': handleApi(['POST'], async (req, res) => {
@@ -181,8 +196,12 @@ const routes = {
 
   'pay-alipay-notify': handleApi(['POST'], async (req, res) => {
     const rawBody = await readRawBody(req);
-    await handleAlipayNotify({ headers: req.headers || {}, rawBody });
-    sendText(res, 200, 'success');
+    try {
+      await handleAlipayNotify({ headers: req.headers || {}, rawBody });
+      sendText(res, 200, 'success');
+    } catch (_) {
+      sendText(res, 200, 'failure');
+    }
   }),
 
   'ai-report-generate': handleApi(['POST'], async (req, res) => {

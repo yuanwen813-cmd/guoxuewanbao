@@ -2,11 +2,15 @@ const crypto = require('crypto');
 const { HttpError } = require('./response');
 
 function getAlipayConfig() {
+  const publicWebUrl = String(process.env.PUBLIC_WEB_URL || '').replace(/\/+$/, '');
   return {
     appId: process.env.ALIPAY_APP_ID,
     privateKey: process.env.ALIPAY_PRIVATE_KEY,
     publicKey: process.env.ALIPAY_PUBLIC_KEY,
     notifyUrl: process.env.ALIPAY_NOTIFY_URL,
+    returnUrl:
+      process.env.ALIPAY_RETURN_URL ||
+      (publicWebUrl ? `${publicWebUrl}/wallet` : undefined),
     gateway: process.env.ALIPAY_GATEWAY || 'https://openapi.alipay.com/gateway.do',
   };
 }
@@ -18,6 +22,22 @@ function isAlipayConfigured() {
 
 function normalizeKey(raw) {
   return String(raw || '').replace(/\\n/g, '\n');
+}
+
+function toPem(raw, type) {
+  const normalized = normalizeKey(raw).trim();
+  if (!normalized) return '';
+  if (normalized.includes('-----BEGIN')) return normalized;
+  const body = normalized.replace(/\s+/g, '').match(/.{1,64}/g)?.join('\n') || normalized;
+  return `-----BEGIN ${type}-----\n${body}\n-----END ${type}-----`;
+}
+
+function normalizePrivateKey(raw) {
+  return toPem(raw, 'PRIVATE KEY');
+}
+
+function normalizePublicKey(raw) {
+  return toPem(raw, 'PUBLIC KEY');
 }
 
 function centsToYuanString(cents) {
@@ -43,10 +63,21 @@ function canonicalQuery(params) {
 }
 
 function signAlipay(params) {
-  return crypto
-    .createSign('RSA-SHA256')
-    .update(canonicalQuery(params), 'utf8')
-    .sign(normalizeKey(getAlipayConfig().privateKey), 'base64');
+  const config = getAlipayConfig();
+  const signText = canonicalQuery(params);
+  try {
+    return crypto
+      .createSign('RSA-SHA256')
+      .update(signText, 'utf8')
+      .sign(normalizePrivateKey(config.privateKey), 'base64');
+  } catch (error) {
+    const normalized = normalizeKey(config.privateKey).trim();
+    if (normalized.includes('-----BEGIN')) throw error;
+    return crypto
+      .createSign('RSA-SHA256')
+      .update(signText, 'utf8')
+      .sign(toPem(config.privateKey, 'RSA PRIVATE KEY'), 'base64');
+  }
 }
 
 async function createAlipayPayment(order) {
@@ -89,6 +120,7 @@ async function createAlipayPayment(order) {
     timestamp: new Date().toISOString().slice(0, 19).replace('T', ' '),
     version: '1.0',
     notify_url: getAlipayConfig().notifyUrl,
+    return_url: getAlipayConfig().returnUrl,
     biz_content: bizContent,
   };
   const signedParams = { ...params, sign: signAlipay(params) };
@@ -111,7 +143,11 @@ function parseFormBody(rawBody) {
 }
 
 function verifyAlipayNotify(parsed) {
+  const config = getAlipayConfig();
   if (!isAlipayConfigured()) throw new HttpError(400, '支付宝支付未配置完整，无法验签');
+  if (parsed.app_id && parsed.app_id !== config.appId) {
+    throw new HttpError(400, '支付宝回调应用不匹配');
+  }
   const sign = parsed.sign;
   if (!sign) throw new HttpError(400, '支付宝回调缺少签名');
   const params = { ...parsed };
@@ -120,7 +156,7 @@ function verifyAlipayNotify(parsed) {
   const ok = crypto
     .createVerify('RSA-SHA256')
     .update(canonicalQuery(params), 'utf8')
-    .verify(normalizeKey(getAlipayConfig().publicKey), sign, 'base64');
+    .verify(normalizePublicKey(config.publicKey), sign, 'base64');
   if (!ok) throw new HttpError(400, '支付宝回调验签失败');
 }
 
@@ -140,5 +176,36 @@ function parseAlipayNotify(rawBody) {
 
 module.exports = {
   createAlipayPayment,
+  getAlipayRuntimeStatus,
   parseAlipayNotify,
 };
+
+function maskTail(value) {
+  const text = String(value || '');
+  if (!text) return '';
+  return text.length <= 6 ? '******' : `******${text.slice(-6)}`;
+}
+
+function keyStatus(raw) {
+  const normalized = normalizeKey(raw).trim();
+  return {
+    present: Boolean(normalized),
+    hasPemHeader: normalized.includes('-----BEGIN'),
+  };
+}
+
+function getAlipayRuntimeStatus() {
+  const config = getAlipayConfig();
+  return {
+    configured: isAlipayConfigured(),
+    appId: maskTail(config.appId),
+    hasAppId: Boolean(config.appId),
+    privateKey: keyStatus(config.privateKey),
+    publicKey: keyStatus(config.publicKey),
+    hasNotifyUrl: Boolean(config.notifyUrl),
+    hasReturnUrl: Boolean(config.returnUrl),
+    notifyUrl: config.notifyUrl || '',
+    returnUrl: config.returnUrl || '',
+    gateway: config.gateway,
+  };
+}

@@ -132,6 +132,7 @@ https://api.your-domain.com/api/pay-wechat-notify
 - `ALIPAY_PRIVATE_KEY`
 - `ALIPAY_PUBLIC_KEY`
 - `ALIPAY_NOTIFY_URL`
+- `ALIPAY_RETURN_URL`
 - `ALIPAY_GATEWAY`
 
 notify_url：
@@ -140,7 +141,20 @@ notify_url：
 https://api.your-domain.com/api/pay-alipay-notify
 ```
 
+return_url：
+
+```text
+https://your-domain.com/wallet
+```
+
 第一版优先支持 Web 支付链接；`h5`、`app`、小程序已预留。
+
+支付宝密钥填写说明：
+
+- `ALIPAY_PRIVATE_KEY` 填应用私钥，只能放在 Vercel 服务端环境变量。
+- `ALIPAY_PUBLIC_KEY` 填支付宝公钥，不是应用公钥。
+- 私钥和公钥可以保留 `-----BEGIN ...-----` 头尾；如果从支付宝工具复制的是纯 key body，服务端会自动补齐 PEM 格式。
+- 配置完成并重新部署后，可访问 `/api/payment-debug` 检查 `alipay.configured` 是否为 `true`，该接口不会返回密钥内容。
 
 ## 10. 充值订单和回调入账流程
 
@@ -148,7 +162,7 @@ https://api.your-domain.com/api/pay-alipay-notify
 2. 服务端校验登录态和金额。
 3. 服务端创建 `recharge_orders`，状态为 `pending`。
 4. 服务端调用微信或支付宝下单。
-5. 客户端展示二维码或支付链接。
+5. 客户端展示微信扫码链接或支付宝支付链接。
 6. 支付平台异步回调 `/api/pay-wechat-notify` 或 `/api/pay-alipay-notify`。
 7. 服务端保存回调日志。
 8. 服务端验签、校验订单号、校验金额。

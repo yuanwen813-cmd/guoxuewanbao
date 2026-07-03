@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_typography.dart';
 import '../auth/auth_store.dart';
+import 'payment_link_opener.dart';
 import 'server_wallet_api.dart';
 import 'wallet_store.dart';
 
@@ -426,18 +427,36 @@ class _RechargeStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final payment = result.payment;
     final order = result.order;
+    final paymentText = payment.codeUrl ?? payment.payUrl;
+    final paid = order.status == 'paid';
     return Container(
       key: const Key('wallet_recharge_status'),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: GuoXueColors.primary.withOpacity(0.06),
+        color: paid
+            ? GuoXueColors.success.withOpacity(0.08)
+            : GuoXueColors.primary.withOpacity(0.06),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: GuoXueColors.primary.withOpacity(0.12)),
+        border: Border.all(
+          color: paid
+              ? GuoXueColors.success.withOpacity(0.18)
+              : GuoXueColors.primary.withOpacity(0.12),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('支付中', style: GuoXueTypography.h3),
+          Row(
+            children: [
+              Icon(
+                paid ? Icons.check_circle_outline : Icons.payments_outlined,
+                size: 20,
+                color: paid ? GuoXueColors.success : GuoXueColors.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(paid ? '支付已完成' : '等待支付', style: GuoXueTypography.h3),
+            ],
+          ),
           const SizedBox(height: 8),
           Text(
             '订单号：${order.outTradeNo}\n金额：${formatWalletCents(order.amountCents)}\n状态：${_statusLabel(order.status)}',
@@ -447,28 +466,90 @@ class _RechargeStatusCard extends StatelessWidget {
               letterSpacing: 0,
             ),
           ),
-          if (payment.codeUrl != null || payment.payUrl != null) ...[
-            const SizedBox(height: 8),
-            SelectableText(
-              payment.codeUrl ?? payment.payUrl!,
+          if (!paid) ...[
+            const SizedBox(height: 12),
+            _PaymentInstruction(payment: payment, paymentText: paymentText),
+          ],
+          if (paymentText != null && !paid) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                if (payment.payUrl != null || payment.provider == 'alipay')
+                  FilledButton.icon(
+                    key: const Key('wallet_open_pay_url'),
+                    onPressed: () => _openPayment(context, paymentText),
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('打开支付页面'),
+                  ),
+                OutlinedButton.icon(
+                  key: const Key('wallet_copy_pay_url'),
+                  onPressed: () => _copyPaymentText(context, paymentText),
+                  icon: const Icon(Icons.copy),
+                  label: const Text('复制支付信息'),
+                ),
+              ],
+            ),
+          ],
+          if (payment.provider == 'wechat' &&
+              payment.codeUrl != null &&
+              !paid) ...[
+            const SizedBox(height: 12),
+            Container(
+              key: const Key('wallet_wechat_pay_code'),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.72),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: GuoXueColors.gold.withOpacity(0.18),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '微信支付链接',
+                    style: GuoXueTypography.body.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SelectableText(
+                    payment.codeUrl!,
+                    style: GuoXueTypography.caption.copyWith(
+                      color: GuoXueColors.primary,
+                      height: 1.4,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '微信 Native 支付会返回扫码链接。当前页面先提供复制入口，支付完成后余额会自动刷新，也可以手动刷新支付结果。',
+                    style: GuoXueTypography.caption.copyWith(
+                      color: GuoXueColors.inkGray,
+                      height: 1.4,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (payment.message != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              payment.message!,
               style: GuoXueTypography.caption.copyWith(
-                color: GuoXueColors.primary,
+                color: GuoXueColors.inkGray,
                 height: 1.4,
                 letterSpacing: 0,
               ),
             ),
           ],
-          if (payment.message != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              payment.message!,
-              style: GuoXueTypography.caption.copyWith(
-                color: GuoXueColors.inkGray,
-                letterSpacing: 0,
-              ),
-            ),
-          ],
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: onRefresh,
             icon: const Icon(Icons.refresh),
@@ -487,6 +568,94 @@ class _RechargeStatusCard extends StatelessWidget {
       'refunded' => '已退款',
       _ => '等待支付回调',
     };
+  }
+
+  Future<void> _openPayment(BuildContext context, String url) async {
+    if (Uri.tryParse(url) == null) {
+      _showMessage(context, '支付链接无效，请复制支付信息后重试');
+      return;
+    }
+    final opened = await openPaymentLink(url);
+    if (!opened && context.mounted) {
+      _showMessage(context, '当前环境无法直接打开支付页，请复制支付信息后重试');
+    }
+  }
+
+  Future<void> _copyPaymentText(BuildContext context, String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (context.mounted) {
+      _showMessage(context, '支付信息已复制');
+    }
+  }
+
+  void _showMessage(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+}
+
+class _PaymentInstruction extends StatelessWidget {
+  final RechargePayment payment;
+  final String? paymentText;
+
+  const _PaymentInstruction({
+    required this.payment,
+    required this.paymentText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final text = _instructionText();
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: GuoXueColors.ricePaper,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: GuoXueColors.gold.withOpacity(0.14)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            _icon(),
+            color: GuoXueColors.primary,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: GuoXueTypography.caption.copyWith(
+                color: GuoXueColors.inkGray,
+                height: 1.5,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _icon() {
+    if (!payment.paymentReady || paymentText == null) {
+      return Icons.info_outline;
+    }
+    return payment.provider == 'wechat' ? Icons.qr_code_2 : Icons.open_in_new;
+  }
+
+  String _instructionText() {
+    if (!payment.paymentReady || paymentText == null) {
+      return '支付订单已创建，但当前支付参数未返回。请检查服务端微信或支付宝配置。';
+    }
+    if (payment.provider == 'wechat') {
+      return '微信充值请扫码支付。到账只以微信支付异步回调为准，前端不会直接增加余额。';
+    }
+    if (payment.provider == 'alipay') {
+      return '支付宝充值请打开支付页面完成付款。到账只以支付宝异步通知为准，前端不会直接增加余额。';
+    }
+    return '请完成支付后等待服务端回调入账。';
   }
 }
 
