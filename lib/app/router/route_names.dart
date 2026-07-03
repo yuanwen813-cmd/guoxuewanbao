@@ -90,7 +90,6 @@ class RouteNames {
   static const result = 'result';
   static const wallet = 'wallet';
   static const settings = 'settings';
-  static const apiKey = 'apiKey';
   static const privacy = 'privacy';
   static const disclaimer = 'disclaimer';
 }

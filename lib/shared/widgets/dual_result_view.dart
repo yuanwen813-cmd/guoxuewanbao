@@ -16,10 +16,13 @@ import 'yinyang_loader.dart';
 class DualResultView extends ConsumerStatefulWidget {
   /// 测算方法 ID（xiaoliuren / money_hexagram / bazi）
   final String methodId;
+
   /// 标准推算结果（本地引擎输出，展示给用户）
   final Map<String, String> standardResults;
+
   /// 传给 AI 的结构化数据
   final Map<String, dynamic> resultData;
+
   /// 用户问题
   final String userQuestion;
 
@@ -50,7 +53,7 @@ class _DualResultViewState extends ConsumerState<DualResultView> {
   Future<void> _interpret() async {
     final ai = ref.read(aiGatewayProvider);
     if (ai == null) {
-      setState(() => _error = '请先在设置中配置 DeepSeek API Key');
+      setState(() => _error = 'AI 服务暂未配置，请稍后再试');
       return;
     }
 
@@ -170,13 +173,11 @@ class _DualResultViewState extends ConsumerState<DualResultView> {
                       const Icon(Icons.lightbulb_outline,
                           color: GuoXueColors.gold, size: 20),
                       const SizedBox(width: 8),
-                      Text('三、事项解读与参考建议',
-                          style: GuoXueTypography.h3),
+                      Text('三、事项解读与参考建议', style: GuoXueTypography.h3),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(_interpretation!.advice,
-                      style: GuoXueTypography.body),
+                  Text(_interpretation!.advice, style: GuoXueTypography.body),
                 ],
               ),
             ),
@@ -187,14 +188,15 @@ class _DualResultViewState extends ConsumerState<DualResultView> {
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
-              children: _interpretation!.tags.map((tag) => Chip(
-                    label: Text(tag,
-                        style: GuoXueTypography.caption.copyWith(
-                            color: GuoXueColors.primary)),
-                    backgroundColor:
-                        GuoXueColors.primary.withOpacity(0.08),
-                    side: BorderSide.none,
-                  )).toList(),
+              children: _interpretation!.tags
+                  .map((tag) => Chip(
+                        label: Text(tag,
+                            style: GuoXueTypography.caption
+                                .copyWith(color: GuoXueColors.primary)),
+                        backgroundColor: GuoXueColors.primary.withOpacity(0.08),
+                        side: BorderSide.none,
+                      ))
+                  .toList(),
             ),
           ],
 

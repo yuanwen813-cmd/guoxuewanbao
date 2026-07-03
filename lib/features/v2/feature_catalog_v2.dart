@@ -158,7 +158,7 @@ class FeatureCatalogV2 {
     FeatureEntryV2(
       id: 'natal_reading',
       title: '八字命理',
-      subtitle: '输入出生资料，生成八字四柱、本命总览、流年与月度参考，并支持 AI 详解。',
+      subtitle: '查看结果说明，填写出生资料，生成八字四柱、本命总览、流年与月度参考，并支持 AI 详解。',
       route: '/natal/reading',
       icon: Icons.account_circle_outlined,
       category: FeatureCategoryV2.natal,
@@ -194,16 +194,6 @@ class FeatureCatalogV2 {
       category: FeatureCategoryV2.natal,
       status: FeatureStatusV2.stable,
       actionLabel: '管理',
-    ),
-    FeatureEntryV2(
-      id: 'natal_result_overview',
-      title: '推演结果说明',
-      subtitle: '完成八字命理后，可查看本命总览、八字四柱、流年运势与月度运势参考。',
-      route: '/natal/reading/result',
-      icon: Icons.fact_check_outlined,
-      category: FeatureCategoryV2.natal,
-      status: FeatureStatusV2.stable,
-      actionLabel: '查看',
     ),
   ];
 
@@ -383,7 +373,7 @@ class FeatureCatalogV2 {
     FeatureEntryV2(
       id: 'settings',
       title: '设置',
-      subtitle: '隐私、免责声明与接口配置',
+      subtitle: '隐私声明、免责声明与本地数据管理',
       route: '/settings',
       icon: Icons.settings_outlined,
       category: FeatureCategoryV2.mine,

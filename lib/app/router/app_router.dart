@@ -29,7 +29,6 @@ import '../../features/money_hexagram/money_hexagram_page.dart';
 import '../../features/placeholder/placeholder_page.dart';
 import '../../features/recommend/recommend_page.dart';
 import '../../features/result/result_page.dart';
-import '../../features/settings/api_key_page.dart';
 import '../../features/settings/disclaimer_page.dart';
 import '../../features/settings/privacy_page.dart';
 import '../../features/settings/settings_page.dart';
@@ -519,11 +518,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         name: RouteNames.settings,
         builder: (context, state) => const SettingsPage(),
-      ),
-      GoRoute(
-        path: '/settings/api-key',
-        name: RouteNames.apiKey,
-        builder: (context, state) => const ApiKeyPage(),
       ),
       GoRoute(
         path: '/settings/privacy',

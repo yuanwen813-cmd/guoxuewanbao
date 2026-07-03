@@ -5,10 +5,10 @@ class AiErrorMapper {
   static String map(Object error) {
     final msg = error.toString();
     if (msg.contains('401')) {
-      return 'API Key 无效，请检查设置。';
+      return 'AI 服务认证失败，请稍后再试。';
     }
     if (msg.contains('402')) {
-      return 'API 额度不足，请检查账户。';
+      return 'AI 服务额度不足，请稍后再试。';
     }
     if (msg.contains('429')) {
       return '请求太频繁，请稍后重试。';

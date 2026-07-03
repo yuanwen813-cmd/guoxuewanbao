@@ -39,6 +39,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authStoreProvider);
     final wallet = ref.watch(walletStoreProvider);
+
     ref.listen(authStoreProvider, (previous, next) {
       if (next.isAuthenticated && previous?.isAuthenticated != true) {
         ref.read(walletStoreProvider.notifier).syncFromServer();
@@ -98,7 +99,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
                               _customAmountError = null;
                               _pageError = null;
                             }),
-                    child: const Text('自定义'),
+                    child: const Text('自定义金额'),
                   ),
                 ],
               ),
@@ -128,7 +129,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.add_card_outlined),
-                label: Text(_submitting ? '创建订单中' : '确认充值'),
+                label: Text(_submitting ? '正在创建订单' : '确认充值'),
               ),
               Align(
                 alignment: Alignment.centerLeft,
@@ -257,7 +258,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
         );
       });
     } catch (_) {
-      // Polling failure should not interrupt the page; the user can refresh again.
+      // 轮询失败不打断页面，用户可以手动刷新支付结果。
     }
   }
 }
@@ -332,7 +333,7 @@ class _WalletSummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            phone == null ? '服务端钱包余额' : '服务端钱包余额 · $phone',
+            phone == null ? '当前钱包余额' : '当前钱包余额 · $phone',
             style: GuoXueTypography.caption.copyWith(
               color: GuoXueColors.inkGray,
               letterSpacing: 0,
@@ -349,7 +350,7 @@ class _WalletSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '余额由服务端钱包和流水记录。支付完成后以微信或支付宝异步回调入账为准，前端支付成功不会直接增加余额。',
+            '余额用于 AI 解析扣费。支付完成后以微信或支付宝异步回调入账为准，前端支付成功不会直接增加余额。',
             style: GuoXueTypography.caption.copyWith(
               color: GuoXueColors.inkGray,
               height: 1.4,

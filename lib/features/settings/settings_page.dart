@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme/guoxue_typography.dart';
 import '../../shared/widgets/classical_card.dart';
 
-/// 设置页面
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
@@ -19,36 +18,31 @@ class SettingsPage extends StatelessWidget {
             child: Column(
               children: [
                 _SettingsItem(
-                  icon: Icons.key,
-                  title: 'API Key 配置',
-                  subtitle: '配置 DeepSeek API Key',
-                  onTap: () => context.push('/settings/api-key'),
-                ),
-                const Divider(),
-                _SettingsItem(
                   icon: Icons.privacy_tip_outlined,
-                  title: '隐私政策',
-                  subtitle: '了解我们如何保护你的数据',
+                  title: '隐私声明',
+                  subtitle: '了解我们如何保护你的资料和记录',
                   onTap: () => context.push('/settings/privacy'),
                 ),
                 const Divider(),
                 _SettingsItem(
                   icon: Icons.warning_amber_outlined,
                   title: '免责声明',
-                  subtitle: '使用须知与免责条款',
+                  subtitle: '使用须知与免责声明',
                   onTap: () => context.push('/settings/disclaimer'),
                 ),
                 const Divider(),
                 _SettingsItem(
                   icon: Icons.delete_outline,
                   title: '清除数据',
-                  subtitle: '清除所有历史记录和缓存',
+                  subtitle: '清除本设备上的历史记录和缓存',
                   onTap: () {
                     showDialog(
                       context: context,
                       builder: (ctx) => AlertDialog(
                         title: const Text('确认清除'),
-                        content: const Text('将清除所有历史记录和缓存数据，此操作不可撤销。'),
+                        content: const Text(
+                          '将清除本设备上的历史记录和缓存数据，此操作不可撤销。',
+                        ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(ctx),

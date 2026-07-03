@@ -42,13 +42,11 @@ class _NatalReadingPageState extends State<NatalReadingPage> {
   Widget build(BuildContext context) {
     return V2PageScaffold(
       title: '八字命理',
-      subtitle: '填写出生日期、时间、地点等信息，生成八字命理结构；可选择保存为命盘档案。',
+      subtitle: '先了解结果结构，再填写生辰信息生成八字命理结果。',
       icon: Icons.account_circle_outlined,
       showAppBar: true,
       children: [
-        const _NatalPrivacyNotice(),
-        const SizedBox(height: 10),
-        const _NatalSaveNotice(),
+        const _BaziResultGuide(),
         const SizedBox(height: 12),
         const V2SectionTitle(title: '填写生辰信息'),
         _buildForm(context),
@@ -128,7 +126,7 @@ class _NatalReadingPageState extends State<NatalReadingPage> {
               key: const Key('natal_birth_date'),
               controller: _birthDateController,
               decoration: const InputDecoration(
-                labelText: '出生日期',
+                labelText: '公历出生日期',
                 hintText: 'YYYY-MM-DD',
               ),
               validator: (value) {
@@ -368,42 +366,8 @@ class _ModeBadge extends StatelessWidget {
   }
 }
 
-class _NatalPrivacyNotice extends StatelessWidget {
-  const _NatalPrivacyNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _NoticeBlock(
-      icon: Icons.privacy_tip_outlined,
-      title: '隐私说明',
-      body: '本次八字命理默认不保存出生资料。如需以后复看，可手动选择保存为命盘档案。你可以随时删除已保存的命盘档案。',
-    );
-  }
-}
-
-class _NatalSaveNotice extends StatelessWidget {
-  const _NatalSaveNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _NoticeBlock(
-      icon: Icons.group_outlined,
-      title: '资料填写提示',
-      body: '如果为他人填写出生信息，请确认已获得对方同意。完成临时推演后，可选择保存为命盘档案。',
-    );
-  }
-}
-
-class _NoticeBlock extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String body;
-
-  const _NoticeBlock({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
+class _BaziResultGuide extends StatelessWidget {
+  const _BaziResultGuide();
 
   @override
   Widget build(BuildContext context) {
@@ -417,14 +381,18 @@ class _NoticeBlock extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: GuoXueColors.primary, size: 22),
+          const Icon(
+            Icons.fact_check_outlined,
+            color: GuoXueColors.primary,
+            size: 22,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  '推演结果说明',
                   style: GuoXueTypography.body.copyWith(
                     color: GuoXueColors.inkBlack,
                     fontWeight: FontWeight.w600,
@@ -433,7 +401,7 @@ class _NoticeBlock extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  body,
+                  '完成生辰填写后，可查看本命总览、八字四柱、流年运势、月度运势，并可输入想了解的事项生成 AI 详解。结果基于北京时间排盘，当前不启用真太阳时或出生地经度修正。',
                   style: GuoXueTypography.caption.copyWith(
                     color: GuoXueColors.inkGray,
                     letterSpacing: 0,

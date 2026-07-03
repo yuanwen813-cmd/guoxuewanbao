@@ -64,8 +64,8 @@ class DeepSeekException implements Exception {
   factory DeepSeekException.fromDioError(DioException e) {
     final statusCode = e.response?.statusCode;
     final message = switch (statusCode) {
-      401 => 'API Key 无效，请在设置中配置有效的 Key。',
-      402 => 'API 额度不足，请检查账户余额。',
+      401 => 'AI 服务认证失败，请稍后再试。',
+      402 => 'AI 服务额度不足，请稍后再试。',
       429 => '请求过于频繁，请稍后重试。',
       _ => 'AI 服务暂时不可用（${e.message}）',
     };
