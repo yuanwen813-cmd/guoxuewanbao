@@ -283,6 +283,11 @@ class _WalletPageState extends ConsumerState<WalletPage> {
                 outTradeNo: current.order.outTradeNo,
               );
       if (!mounted) return;
+      if (_latestRecharge?.order.id != current.order.id) return;
+      if (order.status == 'closed') {
+        setState(() => _latestRecharge = null);
+        return;
+      }
       setState(() {
         _latestRecharge = RechargeCreateResult(
           order: order,
@@ -320,27 +325,33 @@ class _WalletPageState extends ConsumerState<WalletPage> {
     );
     if (confirmed != true) return;
 
+    _pollTimer?.cancel();
     setState(() {
       _submitting = true;
       _pageError = null;
+      _latestRecharge = null;
     });
     try {
       await ref.read(walletStoreProvider.notifier).cancelRecharge(
             orderId: current.order.id,
             outTradeNo: current.order.outTradeNo,
           );
-      _pollTimer?.cancel();
       if (!mounted) return;
-      setState(() => _latestRecharge = null);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('待支付订单已取消')),
       );
     } on ServerWalletException catch (error) {
       if (!mounted) return;
-      setState(() => _pageError = error.message);
+      setState(() {
+        _latestRecharge = current;
+        _pageError = error.message;
+      });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _pageError = '取消订单失败，请稍后再试。');
+      setState(() {
+        _latestRecharge = current;
+        _pageError = '取消订单失败，请稍后再试。';
+      });
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
