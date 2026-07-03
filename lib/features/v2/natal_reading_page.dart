@@ -401,7 +401,7 @@ class _BaziResultGuide extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '完成生辰填写后，可查看本命总览、八字四柱、流年运势、月度运势，并可输入想了解的事项生成 AI 详解。结果基于北京时间排盘，当前不启用真太阳时或出生地经度修正。',
+                  '完成生辰填写后，可查看本命总览、八字四柱、流年运势、月度运势，并可生成 AI 详解。AI 详解可选填写关注方向；不填写则默认生成整体命盘详解。结果基于北京时间排盘，当前不启用真太阳时或出生地经度修正。',
                   style: GuoXueTypography.caption.copyWith(
                     color: GuoXueColors.inkGray,
                     letterSpacing: 0,

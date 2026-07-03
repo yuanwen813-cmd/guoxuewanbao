@@ -67,6 +67,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
     final configs = AiReportProductCatalog.forFeature(widget.featureKey);
     if (configs.isEmpty) return const SizedBox.shrink();
     final wallet = ref.watch(walletStoreProvider);
+    final focusOptional = _focusOptional;
 
     return Container(
       key: Key('ai_report_panel_${widget.featureKey}'),
@@ -101,7 +102,9 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
           ),
           const SizedBox(height: 8),
           Text(
-            '请先输入想重点了解的事项。AI 只读取当前页面已经生成的结构化结果，不重新排盘、不重新起卦。',
+            focusOptional
+                ? '可选择重点了解的方向；不填写时，AI 将按整体命盘详解生成报告。AI 只读取当前页面已经生成的结构化结果，不重新排盘。'
+                : '请先输入想重点了解的事项。AI 只读取当前页面已经生成的结构化结果，不重新排盘、不重新起卦。',
             style: GuoXueTypography.caption.copyWith(
               color: GuoXueColors.inkGray,
               letterSpacing: 0,
@@ -142,9 +145,11 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
             controller: _focusController,
             minLines: 2,
             maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: '想重点了解的事项',
-              hintText: '例如：合作趋势、事业选择、关系相处、今年节奏',
+            decoration: InputDecoration(
+              labelText: focusOptional ? '想重点了解的方向（可选）' : '想重点了解的事项',
+              hintText: focusOptional
+                  ? '可选，例如：事业、财运、婚恋、健康、近三年趋势。不填写则生成整体命盘详解。'
+                  : '例如：合作趋势、事业选择、关系相处、今年节奏',
             ),
           ),
           const SizedBox(height: 12),
@@ -187,14 +192,15 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
       return;
     }
 
-    final focus = _focusController.text.trim();
-    if (focus.isEmpty) {
+    final rawFocus = _focusController.text.trim();
+    if (rawFocus.isEmpty && !_focusOptional) {
       setState(() {
         _errors[config.id] = '请先输入想重点了解的事项。';
         _answers.remove(config.id);
       });
       return;
     }
+    final focus = rawFocus.isEmpty ? _defaultDestinyFocus : rawFocus;
 
     setState(() {
       _loadingProductId = config.id;
@@ -237,6 +243,14 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
       if (mounted) setState(() => _loadingProductId = null);
     }
   }
+
+  bool get _focusOptional {
+    return widget.featureKey == AiReportFeatureKeys.bazi ||
+        widget.featureKey == AiReportFeatureKeys.tiebanShenshu ||
+        widget.featureKey == AiReportFeatureKeys.ziweiDoushu;
+  }
+
+  String get _defaultDestinyFocus => '整体命盘详解';
 
   String _buildUserPrompt(AiReportProductConfig config, String focus) {
     final template =

@@ -308,7 +308,7 @@ class _TiebanStandaloneResult extends StatelessWidget {
         const SizedBox(height: 10),
         DestinyAiExplanationCard(
           title: 'AI 详解',
-          description: '请输入想了解的事项，AI 会结合铁板神数数序、四柱结构和核时要点进行说明。',
+          description: '可选填写想重点了解的方向；不填写则生成整体命盘详解。',
           systemPrompt:
               '你是国学万宝匣的铁板神数解释助手。请基于出生资料、四柱结构、数序候选和核时提示进行中文解释，表达要清楚、有边界。',
           contextText: contextText,
@@ -362,7 +362,7 @@ class _ZiweiStandaloneResult extends StatelessWidget {
         const SizedBox(height: 10),
         DestinyAiExplanationCard(
           title: 'AI 详解',
-          description: '请输入想了解的事项，AI 会结合紫微斗数命盘结构和十二宫摘要进行说明。',
+          description: '可选填写想重点了解的方向；不填写则生成整体命盘详解。',
           systemPrompt:
               '你是国学万宝匣的紫微斗数解释助手。请基于出生资料、命宫身宫、十二宫和主星结构进行中文解释，表达要清楚、有边界。',
           contextText: contextText,

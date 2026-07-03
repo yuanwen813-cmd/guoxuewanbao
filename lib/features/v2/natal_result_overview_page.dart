@@ -55,10 +55,10 @@ class NatalResultOverviewPage extends ConsumerWidget {
           const SizedBox(height: 10),
           DestinyAiExplanationCard(
             title: 'AI 详解',
-            description: '请输入想了解的事项，AI 会结合当前八字命理结构进行说明。',
+            description: '可选填写想重点了解的方向；不填写则生成整体命盘详解。',
             systemPrompt:
                 '你是国学万宝匣的八字命理解释助手。请基于结构化四柱、五行、流年和月度信息进行中文解释，表达要清楚、有边界。',
-            contextText: report.buildAiContext(questionFocus: '用户将在输入框中填写'),
+            contextText: report.buildAiContext(questionFocus: '整体命盘详解'),
             inputKeyName: 'bazi_ai_focus',
             buttonKeyName: 'bazi_ai_explain_button',
           ),
@@ -182,7 +182,7 @@ class _ResultScopeNotice extends StatelessWidget {
         border: Border.all(color: GuoXueColors.gold.withOpacity(0.18)),
       ),
       child: Text(
-        '八字命理结果已根据出生资料生成。默认按北京时间 UTC+8 排盘，暂不启用真太阳时、出生地经度修正或子初换日。AI 详解需要先输入想了解的事项。',
+        '八字命理结果已根据出生资料生成。默认按北京时间 UTC+8 排盘，暂不启用真太阳时、出生地经度修正或子初换日。AI 详解可不填写方向，默认生成整体命盘详解。',
         style: GuoXueTypography.caption.copyWith(
           color: GuoXueColors.inkGray,
           letterSpacing: 0,

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:guoxueapp/domain/common/common_result_models.dart';
+import 'package:guoxueapp/features/ai_reports/ai_report_product_panel.dart';
 import 'package:guoxueapp/features/ai_reports/ai_report_product_config.dart';
 import 'package:guoxueapp/features/auth/auth_store.dart';
 import 'package:guoxueapp/features/result_common/common_divination_result_page.dart';
@@ -210,6 +211,86 @@ void main() {
 
     expect(focusField.controller?.text, '这次合作是否顺利？');
     expect(find.text('请先输入想重点了解的事项。'), findsNothing);
+  });
+
+  testWidgets('destiny AI report allows empty focus as whole chart reading',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          walletStoreProvider.overrideWith(
+            (ref) => WalletStore(useServer: false),
+          ),
+          authStoreProvider.overrideWith(
+            (ref) => AuthStore(
+              initialState: const AuthState(
+                initialized: true,
+                token: 'test-token',
+                user: AppUser(id: 'test-user', phone: '13800000000'),
+              ),
+            ),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AiReportProductPanel(
+                featureKey: AiReportFeatureKeys.bazi,
+                sourceSummary: '八字命理结构已生成',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('想重点了解的方向（可选）'), findsOneWidget);
+    expect(find.textContaining('不填写则生成整体命盘详解'), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('ai_report_bazi_brief_1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('请先输入想重点了解的事项。'), findsNothing);
+  });
+
+  testWidgets('question AI report still requires focus', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          walletStoreProvider.overrideWith(
+            (ref) => WalletStore(useServer: false),
+          ),
+          authStoreProvider.overrideWith(
+            (ref) => AuthStore(
+              initialState: const AuthState(
+                initialized: true,
+                token: 'test-token',
+                user: AppUser(id: 'test-user', phone: '13800000000'),
+              ),
+            ),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AiReportProductPanel(
+                featureKey: AiReportFeatureKeys.coinHexagram,
+                sourceSummary: '金钱卦结构已生成',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const Key('ai_report_coin_hexagram_question_brief')),
+    );
+    await tester.pump();
+
+    expect(find.text('请先输入想重点了解的事项。'), findsOneWidget);
   });
 
   test('stable route paths remain registered', () {
