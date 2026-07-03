@@ -2,15 +2,12 @@ const crypto = require('crypto');
 const { HttpError } = require('./response');
 
 function getAlipayConfig() {
-  const publicWebUrl = String(process.env.PUBLIC_WEB_URL || '').replace(/\/+$/, '');
   return {
     appId: process.env.ALIPAY_APP_ID,
     privateKey: process.env.ALIPAY_PRIVATE_KEY,
     publicKey: process.env.ALIPAY_PUBLIC_KEY,
     notifyUrl: process.env.ALIPAY_NOTIFY_URL,
-    returnUrl:
-      process.env.ALIPAY_RETURN_URL ||
-      (publicWebUrl ? `${publicWebUrl}/wallet` : undefined),
+    returnUrl: process.env.ALIPAY_RETURN_URL,
     gateway: process.env.ALIPAY_GATEWAY || 'https://openapi.alipay.com/gateway.do',
   };
 }
@@ -120,7 +117,7 @@ async function createAlipayPayment(order) {
     timestamp: new Date().toISOString().slice(0, 19).replace('T', ' '),
     version: '1.0',
     notify_url: getAlipayConfig().notifyUrl,
-    return_url: getAlipayConfig().returnUrl,
+    ...(getAlipayConfig().returnUrl ? { return_url: getAlipayConfig().returnUrl } : {}),
     biz_content: bizContent,
   };
   const signedParams = { ...params, sign: signAlipay(params) };

@@ -821,7 +821,7 @@ class _PaymentInstruction extends StatelessWidget {
       return '微信充值请扫码支付。到账只以微信支付异步回调为准，前端不会直接增加余额。';
     }
     if (payment.provider == 'alipay') {
-      return '支付宝充值请打开支付页面完成付款。到账只以支付宝异步通知为准，前端不会直接增加余额。';
+      return '支付宝充值会打开新的支付页面。付款成功后请关闭支付宝页面，回到本页查看到账状态；到账只以支付宝异步通知为准。';
     }
     return '请完成支付后等待服务端回调入账。';
   }

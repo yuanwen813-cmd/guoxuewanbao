@@ -132,7 +132,7 @@ https://api.your-domain.com/api/pay-wechat-notify
 - `ALIPAY_PRIVATE_KEY`
 - `ALIPAY_PUBLIC_KEY`
 - `ALIPAY_NOTIFY_URL`
-- `ALIPAY_RETURN_URL`
+- `ALIPAY_RETURN_URL`（可选，当前建议留空）
 - `ALIPAY_GATEWAY`
 
 notify_url：
@@ -141,11 +141,13 @@ notify_url：
 https://api.your-domain.com/api/pay-alipay-notify
 ```
 
-return_url：
+return_url 当前建议留空：
 
 ```text
-https://your-domain.com/wallet
+ALIPAY_RETURN_URL=
 ```
+
+原因：Web 支付页会在新标签页打开。用户付款成功后关闭支付宝页面，回到原钱包充值页即可看到支付状态刷新。这样可以避免支付宝回跳到另一个域名或新页面后登录态不一致。
 
 第一版优先支持 Web 支付链接；`h5`、`app`、小程序已预留。
 
