@@ -16,6 +16,7 @@ const {
 } = require('../server/response');
 const { readRawBody } = require('../server/rawBody');
 const {
+  cancelRechargeOrderForUser,
   getRechargeOrderForUser,
   getWallet,
   listWalletTransactions,
@@ -142,6 +143,20 @@ const routes = {
       userId: current.appUser.id,
       orderId: url.searchParams.get('orderId'),
       outTradeNo: url.searchParams.get('outTradeNo'),
+    });
+    sendJson(res, 200, {
+      ok: true,
+      order,
+    });
+  }),
+
+  'recharge-cancel': handleApi(['POST'], async (req, res) => {
+    const current = await requireUser(req);
+    const body = await readJson(req);
+    const order = await cancelRechargeOrderForUser({
+      userId: current.appUser.id,
+      orderId: body.orderId,
+      outTradeNo: body.outTradeNo,
     });
     sendJson(res, 200, {
       ok: true,

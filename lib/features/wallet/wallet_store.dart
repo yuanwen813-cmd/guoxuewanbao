@@ -271,6 +271,28 @@ class WalletStore extends StateNotifier<WalletState> {
     return order;
   }
 
+  Future<RechargeOrder> cancelRecharge({
+    String? orderId,
+    String? outTradeNo,
+  }) async {
+    if (_api == null) {
+      return RechargeOrder(
+        id: orderId ?? '',
+        outTradeNo: outTradeNo ?? '',
+        provider: '',
+        tradeType: '',
+        amountCents: 0,
+        status: 'closed',
+      );
+    }
+    final order = await _api.cancelRecharge(
+      orderId: orderId,
+      outTradeNo: outTradeNo,
+    );
+    await syncFromServer();
+    return order;
+  }
+
   Future<ServerAiReportResult> generateAiReport({
     required String productId,
     required String featureKey,

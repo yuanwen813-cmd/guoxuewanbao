@@ -136,6 +136,16 @@ void main() {
     expect(find.byKey(const Key('wallet_recharge_100')), findsOneWidget);
     expect(find.byKey(const Key('wallet_custom_option')), findsOneWidget);
     expect(find.byKey(const Key('wallet_custom_amount')), findsNothing);
+    expect(find.byKey(const Key('wallet_recharge_confirm_card')), findsNothing);
+    expect(find.byKey(const Key('wallet_recharge_status')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('wallet_recharge_100')));
+    await tester.pump();
+
+    expect(
+        find.byKey(const Key('wallet_recharge_confirm_card')), findsOneWidget);
+    expect(find.byKey(const Key('wallet_confirm_recharge')), findsOneWidget);
+    expect(find.byKey(const Key('wallet_recharge_status')), findsNothing);
 
     await tester.tap(find.byKey(const Key('wallet_custom_option')));
     await tester.pump();

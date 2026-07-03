@@ -26,6 +26,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
   bool _customMode = false;
   bool _submitting = false;
   String _provider = 'wechat';
+  int? _selectedAmountCents;
   RechargeCreateResult? _latestRecharge;
   Timer? _pollTimer;
 
@@ -68,7 +69,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
             _ProviderSelector(
               provider: _provider,
               submitting: _submitting,
-              onChanged: (value) => setState(() => _provider = value),
+              onChanged: _changeProvider,
             ),
             const SizedBox(height: 18),
             if (!_customMode) ...[
@@ -88,7 +89,16 @@ class _WalletPageState extends ConsumerState<WalletPage> {
                       key: Key('wallet_recharge_${option.amountCents}'),
                       onPressed: _submitting
                           ? null
-                          : () => _createRecharge(option.amountCents),
+                          : () => setState(() {
+                                _selectedAmountCents = option.amountCents;
+                                _pageError = null;
+                              }),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor:
+                            _selectedAmountCents == option.amountCents
+                                ? GuoXueColors.primary.withOpacity(0.08)
+                                : null,
+                      ),
                       child: Text(option.label),
                     ),
                   OutlinedButton(
@@ -99,11 +109,21 @@ class _WalletPageState extends ConsumerState<WalletPage> {
                               _customMode = true;
                               _customAmountError = null;
                               _pageError = null;
+                              _selectedAmountCents = null;
                             }),
                     child: const Text('自定义金额'),
                   ),
                 ],
               ),
+              if (_selectedAmountCents != null) ...[
+                const SizedBox(height: 12),
+                _RechargeConfirmCard(
+                  amountCents: _selectedAmountCents!,
+                  provider: _provider,
+                  submitting: _submitting,
+                  onConfirm: () => _createRecharge(_selectedAmountCents!),
+                ),
+              ],
             ],
             if (_customMode) ...[
               Text('自定义金额', style: GuoXueTypography.h3),
@@ -142,6 +162,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
                             _customMode = false;
                             _customAmountError = null;
                             _pageError = null;
+                            _selectedAmountCents = null;
                             _customAmountController.clear();
                           }),
                   icon: const Icon(Icons.arrow_back),
@@ -154,6 +175,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
               _RechargeStatusCard(
                 result: _latestRecharge!,
                 onRefresh: _refreshLatestRecharge,
+                onCancel: _cancelLatestRecharge,
               ),
             ],
             const SizedBox(height: 22),
@@ -193,6 +215,16 @@ class _WalletPageState extends ConsumerState<WalletPage> {
     if (mounted) {
       setState(() => _customMode = false);
     }
+  }
+
+  void _changeProvider(String provider) {
+    if (provider == _provider) return;
+    _pollTimer?.cancel();
+    setState(() {
+      _provider = provider;
+      _latestRecharge = null;
+      _pageError = null;
+    });
   }
 
   Future<void> _createRecharge(int amountCents) async {
@@ -262,6 +294,57 @@ class _WalletPageState extends ConsumerState<WalletPage> {
       // 轮询失败不打断页面，用户可以手动刷新支付结果。
     }
   }
+
+  Future<void> _cancelLatestRecharge() async {
+    final current = _latestRecharge;
+    if (current == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('取消待支付订单'),
+        content: Text(
+          '确定取消这笔 ${_providerLabel(current.order.provider)} '
+          '${formatWalletCents(current.order.amountCents)} 订单吗？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('继续保留'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确认取消'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() {
+      _submitting = true;
+      _pageError = null;
+    });
+    try {
+      await ref.read(walletStoreProvider.notifier).cancelRecharge(
+            orderId: current.order.id,
+            outTradeNo: current.order.outTradeNo,
+          );
+      _pollTimer?.cancel();
+      if (!mounted) return;
+      setState(() => _latestRecharge = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('待支付订单已取消')),
+      );
+    } on ServerWalletException catch (error) {
+      if (!mounted) return;
+      setState(() => _pageError = error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _pageError = '取消订单失败，请稍后再试。');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
 }
 
 class _RechargeOption {
@@ -269,6 +352,73 @@ class _RechargeOption {
   final String label;
 
   const _RechargeOption(this.amountCents, this.label);
+}
+
+String _providerLabel(String provider) {
+  return switch (provider) {
+    'alipay' => '支付宝充值',
+    'wechat' => '微信充值',
+    _ => '充值',
+  };
+}
+
+class _RechargeConfirmCard extends StatelessWidget {
+  final int amountCents;
+  final String provider;
+  final bool submitting;
+  final VoidCallback onConfirm;
+
+  const _RechargeConfirmCard({
+    required this.amountCents,
+    required this.provider,
+    required this.submitting,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('wallet_recharge_confirm_card'),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: GuoXueColors.ricePaper,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: GuoXueColors.gold.withOpacity(0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('确认充值信息', style: GuoXueTypography.h3),
+          const SizedBox(height: 8),
+          Text(
+            '支付方式：${_providerLabel(provider)}\n充值金额：${formatWalletCents(amountCents)}',
+            style: GuoXueTypography.caption.copyWith(
+              color: GuoXueColors.inkGray,
+              height: 1.5,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            key: const Key('wallet_confirm_recharge'),
+            onPressed: submitting ? null : onConfirm,
+            icon: submitting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check_circle_outline),
+            label: Text(
+              submitting
+                  ? '正在创建订单'
+                  : '确认创建 ${formatWalletCents(amountCents)} 充值订单',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _LoginRequiredCard extends StatelessWidget {
@@ -417,10 +567,12 @@ class _ProviderSelector extends StatelessWidget {
 class _RechargeStatusCard extends StatelessWidget {
   final RechargeCreateResult result;
   final VoidCallback onRefresh;
+  final VoidCallback onCancel;
 
   const _RechargeStatusCard({
     required this.result,
     required this.onRefresh,
+    required this.onCancel,
   });
 
   @override
@@ -459,7 +611,10 @@ class _RechargeStatusCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '订单号：${order.outTradeNo}\n金额：${formatWalletCents(order.amountCents)}\n状态：${_statusLabel(order.status)}',
+            '支付方式：${_providerLabel(order.provider)}\n'
+            '订单号：${order.outTradeNo}\n'
+            '金额：${formatWalletCents(order.amountCents)}\n'
+            '状态：${_statusLabel(order.status)}',
             style: GuoXueTypography.caption.copyWith(
               color: GuoXueColors.inkGray,
               height: 1.5,
@@ -550,10 +705,23 @@ class _RechargeStatusCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: onRefresh,
-            icon: const Icon(Icons.refresh),
-            label: const Text('刷新支付结果'),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh),
+                label: const Text('刷新支付结果'),
+              ),
+              if (!paid)
+                TextButton.icon(
+                  key: const Key('wallet_cancel_recharge'),
+                  onPressed: onCancel,
+                  icon: const Icon(Icons.close),
+                  label: const Text('取消订单'),
+                ),
+            ],
           ),
         ],
       ),

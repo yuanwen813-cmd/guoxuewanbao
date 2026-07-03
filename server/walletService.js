@@ -136,6 +136,34 @@ async function getRechargeOrderForUser({ userId, orderId, outTradeNo }) {
   return mapRechargeOrder(data);
 }
 
+async function cancelRechargeOrderForUser({ userId, orderId, outTradeNo }) {
+  if (!orderId && !outTradeNo) {
+    throw new HttpError(400, '缺少要取消的充值订单');
+  }
+  const supabase = getSupabaseServiceClient();
+  let query = supabase.from('recharge_orders').select('*').eq('user_id', userId);
+  if (orderId) query = query.eq('id', orderId);
+  if (outTradeNo) query = query.eq('out_trade_no', outTradeNo);
+  const { data: order, error: readError } = await query.single();
+  if (readError) throw new HttpError(404, '充值订单不存在');
+  if (order.status === 'paid') throw new HttpError(400, '已支付订单不能取消');
+  if (order.status !== 'pending') return mapRechargeOrder(order);
+
+  const { data, error } = await supabase
+    .from('recharge_orders')
+    .update({
+      status: 'closed',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', order.id)
+    .eq('user_id', userId)
+    .eq('status', 'pending')
+    .select('*')
+    .single();
+  if (error) throw new HttpError(500, '取消充值订单失败', error.message);
+  return mapRechargeOrder(data);
+}
+
 async function insertPaymentNotifyLog({
   provider,
   headersJson,
@@ -273,6 +301,7 @@ async function getAiReportForUser({ userId, orderId }) {
 }
 
 module.exports = {
+  cancelRechargeOrderForUser,
   createAiReportDebit,
   completeAiReport,
   createRechargeOrder,

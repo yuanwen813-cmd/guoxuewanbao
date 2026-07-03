@@ -118,6 +118,28 @@ class ServerWalletApi {
     }
   }
 
+  Future<RechargeOrder> cancelRecharge({
+    String? orderId,
+    String? outTradeNo,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/recharge-cancel',
+        data: {
+          if (orderId != null) 'orderId': orderId,
+          if (outTradeNo != null) 'outTradeNo': outTradeNo,
+        },
+        options: await _authOptions(),
+      );
+      final data = response.data ?? const <String, dynamic>{};
+      return RechargeOrder.fromJson(
+        data['order'] as Map<String, dynamic>? ?? const {},
+      );
+    } on DioException catch (error) {
+      throw ServerWalletException.fromDio(error);
+    }
+  }
+
   Future<ServerAiReportResult> generateAiReport({
     required String productId,
     required String featureKey,
