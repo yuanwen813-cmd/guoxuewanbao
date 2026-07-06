@@ -44,6 +44,35 @@ class HistoryService extends ChangeNotifier {
     notifyListeners();
   }
 
+  DivinationHistory saveResultSnapshot(CommonDivinationResult result) {
+    final idx = _records.indexWhere((record) => _matchesResult(record, result));
+    final old = idx >= 0 ? _records[idx] : null;
+    final oldSnapshot =
+        old == null ? const <String, dynamic>{} : old.resultSnapshot;
+    final updatedSnapshot = Map<String, dynamic>.from(oldSnapshot)
+      ..addAll(result.toJson());
+    final record = DivinationHistory(
+      id: old?.id ??
+          '${result.featureId}_${DateTime.now().millisecondsSinceEpoch}',
+      featureId: result.featureId,
+      featureName: result.featureName,
+      question: result.userQuestion,
+      createdAt: result.createdAt,
+      summary: result.summary,
+      resultJson: const JsonEncoder().convert(updatedSnapshot),
+      tags: result.tags ?? old?.tags ?? const [],
+      isFavorite: old?.isFavorite ?? false,
+    );
+    if (idx >= 0) {
+      _records[idx] = record;
+    } else {
+      _records.insert(0, record);
+    }
+    _persist();
+    notifyListeners();
+    return record;
+  }
+
   bool attachAiReportToResult(
     CommonDivinationResult result,
     AiReportSnapshot report,
@@ -51,26 +80,10 @@ class HistoryService extends ChangeNotifier {
     final idx = _records.indexWhere((record) => _matchesResult(record, result));
     if (idx < 0) return false;
 
-    final old = _records[idx];
-    final raw = Map<String, dynamic>.from(old.resultSnapshot);
+    final raw = Map<String, dynamic>.from(_records[idx].resultSnapshot);
     final restored = CommonDivinationResult.fromJson(raw);
     final updatedResult = restored.copyWithAiReport(report);
-    final updatedSnapshot = Map<String, dynamic>.from(raw)
-      ..addAll(updatedResult.toJson());
-
-    _records[idx] = DivinationHistory(
-      id: old.id,
-      featureId: old.featureId,
-      featureName: old.featureName,
-      question: old.question,
-      createdAt: old.createdAt,
-      summary: old.summary,
-      resultJson: const JsonEncoder().convert(updatedSnapshot),
-      tags: old.tags,
-      isFavorite: old.isFavorite,
-    );
-    _persist();
-    notifyListeners();
+    saveResultSnapshot(updatedResult);
     return true;
   }
 

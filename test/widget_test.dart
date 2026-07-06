@@ -307,7 +307,10 @@ void main() {
   });
 
   test('share text includes saved AI report snapshots', () {
-    final result = _coinResult().copyWithAiReport(
+    final result = _coinResult(
+      createdAt: DateTime(2026, 7, 6, 11),
+      summary: '保存历史测试卦象',
+    ).copyWithAiReport(
       AiReportSnapshot(
         productId: 'coin_hexagram_question_brief',
         featureKey: AiReportFeatureKeys.coinHexagram,
@@ -410,6 +413,105 @@ void main() {
     expect(button.onPressed, isNull);
   });
 
+  testWidgets('result page save uses current AI report snapshot',
+      (tester) async {
+    final historyService = HistoryService();
+    var parentSaveCalled = false;
+    final result = _coinResult().copyWithAiReport(
+      AiReportSnapshot(
+        productId: 'coin_hexagram_question_brief',
+        featureKey: AiReportFeatureKeys.coinHexagram,
+        title: '¥1 简析',
+        reportType: 'question_brief',
+        priceLabel: '¥1',
+        text: '保存历史时必须带上这段 AI 解析。',
+        createdAt: DateTime(2026, 7, 6, 10),
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          historyServiceProvider.overrideWith((ref) => historyService),
+          walletStoreProvider.overrideWith(
+            (ref) => WalletStore(useServer: false),
+          ),
+        ],
+        child: MaterialApp(
+          home: CommonDivinationResultPage(
+            result: result,
+            onSave: () => parentSaveCalled = true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.byIcon(Icons.bookmark_outline),
+      ),
+    );
+    await tester.pump();
+
+    final saved = historyService
+        .getAll()
+        .where((item) => item.summary == result.summary)
+        .first;
+    final restored = CommonDivinationResult.fromJson(saved.resultSnapshot);
+
+    expect(parentSaveCalled, isFalse);
+    expect(restored.aiReports.single.text, contains('保存历史时必须带上'));
+  });
+
+  testWidgets('result page share uses current AI report snapshot',
+      (tester) async {
+    var parentShareCalled = false;
+    final result = _coinResult(
+      createdAt: DateTime(2026, 7, 6, 12),
+      summary: '分享结果测试卦象',
+    ).copyWithAiReport(
+      AiReportSnapshot(
+        productId: 'coin_hexagram_question_brief',
+        featureKey: AiReportFeatureKeys.coinHexagram,
+        title: '¥1 简析',
+        reportType: 'question_brief',
+        priceLabel: '¥1',
+        text: '分享结果时必须带上这段 AI 解析。',
+        createdAt: DateTime(2026, 7, 6, 10),
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          walletStoreProvider.overrideWith(
+            (ref) => WalletStore(useServer: false),
+          ),
+        ],
+        child: MaterialApp(
+          home: CommonDivinationResultPage(
+            result: result,
+            onShare: () => parentShareCalled = true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.byIcon(Icons.share),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(parentShareCalled, isFalse);
+    expect(find.textContaining('分享结果时必须带上这段 AI 解析。'), findsWidgets);
+  });
+
   test('stable route paths remain registered', () {
     final routerSource =
         File('lib/app/router/app_router.dart').readAsStringSync();
@@ -437,14 +539,17 @@ void main() {
   });
 }
 
-CommonDivinationResult _coinResult() {
+CommonDivinationResult _coinResult({
+  DateTime? createdAt,
+  String? summary,
+}) {
   return CommonDivinationResult(
     featureId: 'coin_hexagram',
     featureName: '金钱卦',
     categoryId: 'ask',
     userQuestion: '这次合作是否顺利？',
-    createdAt: DateTime(2026, 6, 29, 16, 30),
-    summary: '本卦乾为天，动爻一处，供传统文化参考。',
+    createdAt: createdAt ?? DateTime(2026, 6, 29, 16, 30),
+    summary: summary ?? '本卦乾为天，动爻一处，供传统文化参考。',
     type: DivinationType.hexagram,
     primaryHexagram: const HexagramCard(
       index: 1,

@@ -2,11 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_decoration.dart';
 import '../../app/theme/guoxue_typography.dart';
 import '../../domain/common/common_result_models.dart';
-import '../../domain/history/divination_history.dart';
 import '../../infrastructure/history_service/history_service.dart';
 import '../../shared/disclaimer/disclaimer_block.dart';
 import '../../shared/widgets/classical_card.dart';
@@ -15,7 +16,7 @@ import '../ai_reports/ai_report_product_config.dart';
 import '../ai_reports/ai_report_product_panel.dart';
 
 /// 通用占卜结果页 —— 所有国学功能复用
-class CommonDivinationResultPage extends ConsumerWidget {
+class CommonDivinationResultPage extends ConsumerStatefulWidget {
   final CommonDivinationResult result;
   final VoidCallback? onAIInterpret;
   final VoidCallback? onSave;
@@ -39,22 +40,67 @@ class CommonDivinationResultPage extends ConsumerWidget {
     this.aiInterpreting = false,
   });
 
+  static String buildShareText(CommonDivinationResult r) =>
+      _CommonDivinationResultPageState.buildShareText(r);
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CommonDivinationResultPage> createState() =>
+      _CommonDivinationResultPageState();
+}
+
+class _CommonDivinationResultPageState
+    extends ConsumerState<CommonDivinationResultPage> {
+  late List<AiReportSnapshot> _aiReports;
+
+  CommonDivinationResult get _currentResult =>
+      widget.result.copyWith(aiReports: _aiReports);
+  CommonDivinationResult get result => _currentResult;
+
+  VoidCallback? get onAIInterpret => widget.onAIInterpret;
+  VoidCallback? get onRetry => widget.onRetry;
+  VoidCallback? get onGoHome => widget.onGoHome;
+  bool get aiInterpreting => widget.aiInterpreting;
+
+  @override
+  void initState() {
+    super.initState();
+    _aiReports = List<AiReportSnapshot>.from(widget.result.aiReports);
+  }
+
+  @override
+  void didUpdateWidget(covariant CommonDivinationResultPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldResult = oldWidget.result;
+    final nextResult = widget.result;
+    if (oldResult.featureId != nextResult.featureId ||
+        oldResult.createdAt != nextResult.createdAt ||
+        oldResult.summary != nextResult.summary) {
+      _aiReports = List<AiReportSnapshot>.from(nextResult.aiReports);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final result = _currentResult;
     return Scaffold(
       appBar: AppBar(
         title: Text(result.featureName),
         actions: [
-          if (showDebugButton && onDebugExport != null)
+          if (widget.showDebugButton && widget.onDebugExport != null)
             IconButton(
                 icon: const Icon(Icons.bug_report),
                 tooltip: 'Debug',
-                onPressed: onDebugExport),
-          if (onShare != null)
-            IconButton(icon: const Icon(Icons.share), onPressed: onShare),
-          if (onSave != null)
+                onPressed: widget.onDebugExport),
+          if (widget.onShare != null)
             IconButton(
-                icon: const Icon(Icons.bookmark_outline), onPressed: onSave),
+              icon: const Icon(Icons.share),
+              onPressed: () => _showShareDialog(context),
+            ),
+          if (widget.onSave != null)
+            IconButton(
+              icon: const Icon(Icons.bookmark_outline),
+              onPressed: () => _handleSave(context),
+            ),
         ],
       ),
       body: SingleChildScrollView(
@@ -70,7 +116,7 @@ class CommonDivinationResultPage extends ConsumerWidget {
             const SizedBox(height: 16),
             _buildDisclaimers(),
             const SizedBox(height: 16),
-            _buildActions(ref),
+            _buildActions(context),
           ],
         ),
       ),
@@ -306,7 +352,7 @@ class CommonDivinationResultPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildActions(WidgetRef ref) {
+  Widget _buildActions(BuildContext context) {
     final aiReportFeatureKey = _aiReportFeatureKey;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if (aiReportFeatureKey != null) ...[
@@ -320,28 +366,7 @@ class CommonDivinationResultPage extends ConsumerWidget {
               result.toJson(),
             ),
             initialReports: result.aiReports,
-            onReportGenerated: (report) {
-              final historyService = ref.read(historyServiceProvider);
-              final attached =
-                  historyService.attachAiReportToResult(result, report);
-              if (!attached) {
-                final updatedResult = result.copyWithAiReport(report);
-                historyService.save(
-                  DivinationHistory(
-                    id: 'ai_${result.featureId}_${DateTime.now().millisecondsSinceEpoch}',
-                    featureId: result.featureId,
-                    featureName: result.featureName,
-                    question: result.userQuestion,
-                    createdAt: result.createdAt,
-                    summary: result.summary,
-                    resultJson: const JsonEncoder().convert(
-                      updatedResult.toJson(),
-                    ),
-                    tags: result.tags ?? const [],
-                  ),
-                );
-              }
-            },
+            onReportGenerated: _handleAiReportGenerated,
           ),
         ),
       ] else if (aiInterpreting)
@@ -356,22 +381,22 @@ class CommonDivinationResultPage extends ConsumerWidget {
                 label: 'AI 智能解读',
                 icon: Icons.auto_awesome,
                 onPressed: onAIInterpret)),
-      if (onSave != null)
+      if (widget.onSave != null)
         Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: GuoXueButton(
                 label: '保存到历史记录',
                 icon: Icons.bookmark_outline,
                 primary: false,
-                onPressed: onSave)),
-      if (onShare != null)
+                onPressed: () => _handleSave(context))),
+      if (widget.onShare != null)
         Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: GuoXueButton(
                 label: '分享结果',
                 icon: Icons.share,
                 primary: false,
-                onPressed: onShare)),
+                onPressed: () => _showShareDialog(context))),
       Row(children: [
         if (onRetry != null)
           Expanded(
@@ -393,6 +418,67 @@ class CommonDivinationResultPage extends ConsumerWidget {
                       onPressed: onGoHome))),
       ]),
     ]);
+  }
+
+  void _handleAiReportGenerated(AiReportSnapshot report) {
+    final nextReports = [
+      for (final item in _aiReports)
+        if (item.productId != report.productId) item,
+      report,
+    ];
+    setState(() => _aiReports = nextReports);
+    ref
+        .read(historyServiceProvider)
+        .saveResultSnapshot(widget.result.copyWith(aiReports: nextReports));
+  }
+
+  void _handleSave(BuildContext context) {
+    if (result.aiReports.isEmpty) {
+      widget.onSave?.call();
+      return;
+    }
+    ref.read(historyServiceProvider).saveResultSnapshot(result);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已保存到历史记录，包含 AI 解析内容')),
+    );
+  }
+
+  void _showShareDialog(BuildContext context) {
+    final text = buildShareText(result);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('分享结果'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: SingleChildScrollView(
+            child: SelectableText(text, style: const TextStyle(fontSize: 13)),
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: text));
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('分享内容已复制')),
+                );
+              }
+            },
+            icon: const Icon(Icons.copy_all_outlined),
+            label: const Text('复制'),
+          ),
+          TextButton.icon(
+            onPressed: () => Share.share(text),
+            icon: const Icon(Icons.ios_share_outlined),
+            label: const Text('系统分享'),
+          ),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('关闭')),
+        ],
+      ),
+    );
   }
 
   String? get _aiReportFeatureKey {
