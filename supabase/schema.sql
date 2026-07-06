@@ -33,6 +33,19 @@ create table if not exists sms_login_codes (
   created_at timestamptz not null default now()
 );
 
+create table if not exists sms_send_attempts (
+  id uuid primary key default gen_random_uuid(),
+  phone text not null,
+  client_ip text,
+  user_agent text,
+  status text not null default 'pending' check (status in ('pending', 'sent', 'failed', 'blocked')),
+  provider_request_id text,
+  provider_biz_id text,
+  error_message text,
+  created_at timestamptz not null default now(),
+  completed_at timestamptz
+);
+
 create table if not exists wallet_transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references app_users(id) on delete restrict,
@@ -128,6 +141,15 @@ create index if not exists idx_sms_login_codes_phone_time
 create index if not exists idx_sms_login_codes_active
   on sms_login_codes(phone, expires_at desc)
   where consumed_at is null;
+
+create index if not exists idx_sms_send_attempts_phone_time
+  on sms_send_attempts(phone, created_at desc);
+
+create index if not exists idx_sms_send_attempts_ip_time
+  on sms_send_attempts(client_ip, created_at desc);
+
+create index if not exists idx_sms_send_attempts_time
+  on sms_send_attempts(created_at desc);
 
 create or replace function touch_updated_at()
 returns trigger
@@ -666,3 +688,54 @@ begin
   );
 end;
 $$;
+
+-- Security hardening for the public testing deployment.
+-- All business data must be accessed through Vercel API routes that use the
+-- Supabase service role key. Frontend anon/authenticated roles must not read
+-- or mutate wallet, order, SMS, or AI report tables directly.
+alter table app_users enable row level security;
+alter table wallets enable row level security;
+alter table sms_login_codes enable row level security;
+alter table sms_send_attempts enable row level security;
+alter table wallet_transactions enable row level security;
+alter table recharge_orders enable row level security;
+alter table ai_report_orders enable row level security;
+alter table payment_notify_logs enable row level security;
+alter table ai_call_logs enable row level security;
+
+revoke all on table app_users from public, anon, authenticated;
+revoke all on table wallets from public, anon, authenticated;
+revoke all on table sms_login_codes from public, anon, authenticated;
+revoke all on table sms_send_attempts from public, anon, authenticated;
+revoke all on table wallet_transactions from public, anon, authenticated;
+revoke all on table recharge_orders from public, anon, authenticated;
+revoke all on table ai_report_orders from public, anon, authenticated;
+revoke all on table payment_notify_logs from public, anon, authenticated;
+revoke all on table ai_call_logs from public, anon, authenticated;
+
+revoke execute on function ensure_app_user(uuid, text) from public, anon, authenticated;
+revoke execute on function grant_registration_bonus(uuid) from public, anon, authenticated;
+revoke execute on function create_recharge_order(uuid, text, text, bigint, text) from public, anon, authenticated;
+revoke execute on function mark_recharge_paid(text, text, bigint, uuid, jsonb) from public, anon, authenticated;
+revoke execute on function create_ai_report_debit(uuid, text, text, bigint, jsonb, jsonb, jsonb, text) from public, anon, authenticated;
+revoke execute on function complete_ai_report_order(uuid, text, text, integer, integer) from public, anon, authenticated;
+revoke execute on function refund_ai_report_order(uuid, text, text) from public, anon, authenticated;
+
+grant usage on schema public to service_role;
+grant all on table app_users to service_role;
+grant all on table wallets to service_role;
+grant all on table sms_login_codes to service_role;
+grant all on table sms_send_attempts to service_role;
+grant all on table wallet_transactions to service_role;
+grant all on table recharge_orders to service_role;
+grant all on table ai_report_orders to service_role;
+grant all on table payment_notify_logs to service_role;
+grant all on table ai_call_logs to service_role;
+
+grant execute on function ensure_app_user(uuid, text) to service_role;
+grant execute on function grant_registration_bonus(uuid) to service_role;
+grant execute on function create_recharge_order(uuid, text, text, bigint, text) to service_role;
+grant execute on function mark_recharge_paid(text, text, bigint, uuid, jsonb) to service_role;
+grant execute on function create_ai_report_debit(uuid, text, text, bigint, jsonb, jsonb, jsonb, text) to service_role;
+grant execute on function complete_ai_report_order(uuid, text, text, integer, integer) to service_role;
+grant execute on function refund_ai_report_order(uuid, text, text) to service_role;

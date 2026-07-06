@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { getSupabaseServiceClient } = require('./supabaseClient');
 const { HttpError } = require('./response');
+const { truncateForLog } = require('./security');
 
 function mapWallet(row) {
   if (!row) return null;
@@ -67,6 +68,16 @@ function mapAiReportOrder(row) {
     errorMessage: row.error_message,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function truncateJsonForLog(value, maxLength = 12000) {
+  const text = JSON.stringify(value || {});
+  if (text.length <= maxLength) return value || {};
+  return {
+    truncated: true,
+    originalLength: text.length,
+    preview: text.slice(0, maxLength),
   };
 }
 
@@ -211,9 +222,9 @@ async function insertPaymentNotifyLog({
       provider,
       out_trade_no: outTradeNo || null,
       provider_trade_no: providerTradeNo || null,
-      headers_json: headersJson || {},
-      raw_body: rawBody || '',
-      parsed_json: parsedJson || {},
+      headers_json: truncateJsonForLog(headersJson || {}, 12000),
+      raw_body: truncateForLog(rawBody || '', 20000),
+      parsed_json: truncateJsonForLog(parsedJson || {}, 12000),
     })
     .select('*')
     .single();

@@ -16,6 +16,10 @@ const {
 } = require('../server/response');
 const { readRawBody } = require('../server/rawBody');
 const {
+  assertRequestRateLimit,
+  requireDebugAccess,
+} = require('../server/security');
+const {
   cancelRechargeOrderForUser,
   getRechargeOrderForUser,
   getWallet,
@@ -42,7 +46,7 @@ const routes = {
 
   'auth-send-code': handleApi(['POST'], async (req, res) => {
     const body = await readJson(req);
-    await sendPhoneCode(body.phone);
+    await sendPhoneCode(body.phone, { req });
     sendJson(res, 200, { ok: true });
   }),
 
@@ -56,14 +60,16 @@ const routes = {
     });
   }),
 
-  'auth-debug': handleApi(['GET'], async (_req, res) => {
+  'auth-debug': handleApi(['GET'], async (req, res) => {
+    requireDebugAccess(req);
     sendJson(res, 200, {
       ok: true,
       auth: getAuthRuntimeStatus(),
     });
   }),
 
-  'payment-debug': handleApi(['GET'], async (_req, res) => {
+  'payment-debug': handleApi(['GET'], async (req, res) => {
+    requireDebugAccess(req);
     sendJson(res, 200, {
       ok: true,
       alipay: getAlipayRuntimeStatus(),
@@ -181,8 +187,14 @@ const routes = {
   }),
 
   'pay-wechat-notify': handleApi(['POST'], async (req, res) => {
-    const rawBody = await readRawBody(req);
+    const rawBody = await readRawBody(req, { maxBytes: 64 * 1024 });
     try {
+      assertRequestRateLimit(req, {
+        name: 'pay-wechat-notify',
+        windowMs: 60 * 1000,
+        max: Number(process.env.PAY_NOTIFY_MAX_PER_MINUTE || 60),
+        message: '支付通知过于频繁',
+      });
       await handleWechatNotify({ headers: req.headers || {}, rawBody });
       sendJson(res, 200, { code: 'SUCCESS', message: '成功' });
     } catch (error) {
@@ -210,8 +222,14 @@ const routes = {
   }),
 
   'pay-alipay-notify': handleApi(['POST'], async (req, res) => {
-    const rawBody = await readRawBody(req);
+    const rawBody = await readRawBody(req, { maxBytes: 64 * 1024 });
     try {
+      assertRequestRateLimit(req, {
+        name: 'pay-alipay-notify',
+        windowMs: 60 * 1000,
+        max: Number(process.env.PAY_NOTIFY_MAX_PER_MINUTE || 60),
+        message: '支付通知过于频繁',
+      });
       await handleAlipayNotify({ headers: req.headers || {}, rawBody });
       sendText(res, 200, 'success');
     } catch (_) {

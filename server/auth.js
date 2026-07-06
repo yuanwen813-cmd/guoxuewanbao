@@ -3,6 +3,7 @@ const { getAliyunSmsStatus, sendAliyunSmsCode } = require('./aliyunSms');
 const { getSupabaseServiceClient } = require('./supabaseClient');
 const { HttpError } = require('./response');
 const { grantRegistrationBonusIfEligible } = require('./walletService');
+const { getClientIp } = require('./security');
 
 const mainlandMobilePattern = /^1[3-9]\d{9}$/;
 
@@ -46,11 +47,34 @@ function smsCodeTtlMs() {
 }
 
 function smsMinIntervalMs() {
-  return Math.max(10, Number(process.env.SMS_CODE_MIN_INTERVAL_SECONDS || 60)) * 1000;
+  return Math.max(10, Number(process.env.SMS_CODE_MIN_INTERVAL_SECONDS || 60)) *
+    1000;
 }
 
 function smsMaxPerHour() {
   return Math.max(1, Number(process.env.SMS_CODE_MAX_PER_HOUR || 5));
+}
+
+function smsIpMinIntervalMs() {
+  return Math.max(1, Number(process.env.SMS_IP_MIN_INTERVAL_SECONDS || 5)) *
+    1000;
+}
+
+function smsIpMaxPerHour() {
+  return Math.max(1, Number(process.env.SMS_IP_MAX_PER_HOUR || 30));
+}
+
+function smsGlobalMaxPerMinute() {
+  return Math.max(1, Number(process.env.SMS_GLOBAL_MAX_PER_MINUTE || 120));
+}
+
+function missingSmsAttemptTable(error) {
+  const message = String(error?.message || '');
+  return (
+    error?.code === '42P01' ||
+    error?.code === 'PGRST205' ||
+    message.includes('sms_send_attempts')
+  );
 }
 
 function authSecret() {
@@ -126,8 +150,12 @@ function readAppAuthToken(token) {
       return null;
     }
     const payload = JSON.parse(base64UrlDecode(encoded));
-    if (payload.typ !== 'phone_login' || !payload.sub || !payload.phone) return null;
-    if (Number(payload.exp || 0) < Math.floor(Date.now() / 1000)) return null;
+    if (payload.typ !== 'phone_login' || !payload.sub || !payload.phone) {
+      return null;
+    }
+    if (Number(payload.exp || 0) < Math.floor(Date.now() / 1000)) {
+      return null;
+    }
     return {
       id: payload.sub,
       phone: normalizePhone(payload.phone),
@@ -188,10 +216,51 @@ function mapBusinessPayload(payload) {
   };
 }
 
-async function assertSmsRateLimit(supabase, phone) {
+async function countSmsAttempts(supabase, buildQuery) {
+  const { count, error } = await buildQuery(
+    supabase
+      .from('sms_send_attempts')
+      .select('id', { count: 'exact', head: true }),
+  );
+  if (error) {
+    if (missingSmsAttemptTable(error)) return null;
+    throw new HttpError(500, '短信发送风控检查失败', error.message);
+  }
+  return Number(count || 0);
+}
+
+async function insertSmsAttempt(supabase, payload) {
+  const { data, error } = await supabase
+    .from('sms_send_attempts')
+    .insert(payload)
+    .select('id')
+    .single();
+  if (error) {
+    if (missingSmsAttemptTable(error)) return null;
+    throw new HttpError(500, '短信发送风控记录失败', error.message);
+  }
+  return data?.id || null;
+}
+
+async function updateSmsAttempt(supabase, id, patch) {
+  if (!id) return;
+  await supabase
+    .from('sms_send_attempts')
+    .update({
+      ...patch,
+      completed_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+}
+
+async function assertSmsRateLimit(supabase, phone, { req } = {}) {
   const now = Date.now();
+  const ip = req ? getClientIp(req) : 'unknown';
   const recentSince = new Date(now - smsMinIntervalMs()).toISOString();
+  const recentIpSince = new Date(now - smsIpMinIntervalMs()).toISOString();
   const hourSince = new Date(now - 60 * 60 * 1000).toISOString();
+  const minuteSince = new Date(now - 60 * 1000).toISOString();
+
   const { data: recent, error: recentError } = await supabase
     .from('sms_login_codes')
     .select('id')
@@ -202,6 +271,7 @@ async function assertSmsRateLimit(supabase, phone) {
   if ((recent || []).length > 0) {
     throw new HttpError(429, '验证码发送过于频繁，请稍后再试');
   }
+
   const { count, error: countError } = await supabase
     .from('sms_login_codes')
     .select('id', { count: 'exact', head: true })
@@ -211,17 +281,66 @@ async function assertSmsRateLimit(supabase, phone) {
   if (Number(count || 0) >= smsMaxPerHour()) {
     throw new HttpError(429, '验证码发送次数过多，请稍后再试');
   }
+
+  const recentPhoneAttempts = await countSmsAttempts(supabase, (query) =>
+    query.eq('phone', phone).gte('created_at', recentSince),
+  );
+  if (recentPhoneAttempts !== null && recentPhoneAttempts > 0) {
+    throw new HttpError(429, '验证码发送过于频繁，请稍后再试');
+  }
+
+  if (ip && ip !== 'unknown') {
+    const recentIpAttempts = await countSmsAttempts(supabase, (query) =>
+      query.eq('client_ip', ip).gte('created_at', recentIpSince),
+    );
+    if (recentIpAttempts !== null && recentIpAttempts > 0) {
+      throw new HttpError(429, '验证码发送过于频繁，请稍后再试');
+    }
+    const hourlyIpAttempts = await countSmsAttempts(supabase, (query) =>
+      query.eq('client_ip', ip).gte('created_at', hourSince),
+    );
+    if (hourlyIpAttempts !== null && hourlyIpAttempts >= smsIpMaxPerHour()) {
+      throw new HttpError(429, '验证码发送次数过多，请稍后再试');
+    }
+  }
+
+  const globalMinuteAttempts = await countSmsAttempts(supabase, (query) =>
+    query.gte('created_at', minuteSince),
+  );
+  if (
+    globalMinuteAttempts !== null &&
+    globalMinuteAttempts >= smsGlobalMaxPerMinute()
+  ) {
+    throw new HttpError(429, '短信通道繁忙，请稍后再试');
+  }
 }
 
-async function sendPhoneCode(phone) {
+async function sendPhoneCode(phone, { req } = {}) {
   const normalized = normalizePhone(phone);
   if (isMockOtpEnabled()) {
     return { ok: true, mock: true };
   }
   const supabase = getSupabaseServiceClient();
-  await assertSmsRateLimit(supabase, normalized);
+  await assertSmsRateLimit(supabase, normalized, { req });
+  const attemptId = await insertSmsAttempt(supabase, {
+    phone: normalized,
+    client_ip: req ? getClientIp(req) : null,
+    user_agent: String(req?.headers?.['user-agent'] || '').slice(0, 500),
+    status: 'pending',
+  });
+
   const code = newSmsCode();
-  const sms = await sendAliyunSmsCode({ phone: normalized, code });
+  let sms;
+  try {
+    sms = await sendAliyunSmsCode({ phone: normalized, code });
+  } catch (error) {
+    await updateSmsAttempt(supabase, attemptId, {
+      status: 'failed',
+      error_message: error.message || 'sms provider failed',
+    });
+    throw error;
+  }
+
   const expiresAt = new Date(Date.now() + smsCodeTtlMs()).toISOString();
   const { error } = await supabase.from('sms_login_codes').insert({
     phone: normalized,
@@ -232,8 +351,19 @@ async function sendPhoneCode(phone) {
     expires_at: expiresAt,
   });
   if (error) {
+    await updateSmsAttempt(supabase, attemptId, {
+      status: 'failed',
+      provider_request_id: sms.requestId,
+      provider_biz_id: sms.bizId,
+      error_message: error.message || 'sms code record failed',
+    });
     throw new HttpError(500, '短信验证码记录保存失败，请稍后再试', error.message);
   }
+  await updateSmsAttempt(supabase, attemptId, {
+    status: 'sent',
+    provider_request_id: sms.requestId,
+    provider_biz_id: sms.bizId,
+  });
   return { ok: true };
 }
 

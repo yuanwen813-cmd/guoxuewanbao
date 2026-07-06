@@ -7,7 +7,36 @@ const {
   refundAiReport,
 } = require('./walletService');
 
-const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
+const DEEPSEEK_BASE_URL =
+  process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
+
+function maxPromptChars() {
+  return Math.max(1000, Number(process.env.AI_PROMPT_MAX_CHARS || 16000));
+}
+
+function maxSystemPromptChars() {
+  return Math.max(1000, Number(process.env.AI_SYSTEM_PROMPT_MAX_CHARS || 6000));
+}
+
+function maxInputSnapshotChars() {
+  return Math.max(1000, Number(process.env.AI_INPUT_SNAPSHOT_MAX_CHARS || 50000));
+}
+
+function assertTextLimit(name, value, maxChars) {
+  const text = String(value || '');
+  if (text.length > maxChars) {
+    throw new HttpError(413, `${name}内容过长，请精简后再试`);
+  }
+  return text;
+}
+
+function assertJsonSizeLimit(name, value, maxChars) {
+  const text = JSON.stringify(value || {});
+  if (text.length > maxChars) {
+    throw new HttpError(413, `${name}内容过长，请精简后再试`);
+  }
+  return value || {};
+}
 
 async function callDeepSeek({ product, systemPrompt, userPrompt, temperature }) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
@@ -53,26 +82,45 @@ async function generateAiReport({ userId, body }) {
     throw new HttpError(400, 'AI 解析缺少必要内容');
   }
 
-  const promptSnapshot = [
-    body.title || '',
-    body.systemPrompt || '',
-    body.userPrompt || '',
-  ].join('\n\n');
+  const title = assertTextLimit('标题', body.title || '', 200);
+  const systemPrompt = assertTextLimit(
+    '系统提示词',
+    body.systemPrompt,
+    maxSystemPromptChars(),
+  );
+  const userPrompt = assertTextLimit('解析问题', body.userPrompt, maxPromptChars());
+  const inputSnapshotJson = assertJsonSizeLimit(
+    '输入快照',
+    body.inputSnapshotJson,
+    maxInputSnapshotChars(),
+  );
+  const baziChartJson = assertJsonSizeLimit(
+    '命盘快照',
+    body.baziChartJson,
+    maxInputSnapshotChars(),
+  );
+  const questionResultJson = assertJsonSizeLimit(
+    '结果快照',
+    body.questionResultJson,
+    maxInputSnapshotChars(),
+  );
+
+  const promptSnapshot = [title, systemPrompt, userPrompt].join('\n\n');
 
   const debit = await createAiReportDebit({
     userId,
     product,
-    inputSnapshotJson: body.inputSnapshotJson,
-    baziChartJson: body.baziChartJson,
-    questionResultJson: body.questionResultJson,
+    inputSnapshotJson,
+    baziChartJson,
+    questionResultJson,
     promptSnapshot,
   });
 
   try {
     const ai = await callDeepSeek({
       product,
-      systemPrompt: body.systemPrompt,
-      userPrompt: body.userPrompt,
+      systemPrompt,
+      userPrompt,
       temperature: body.temperature,
     });
     const completed = await completeAiReport({
@@ -93,11 +141,17 @@ async function generateAiReport({ userId, body }) {
       errorMessage: error.message || 'AI 调用失败，已自动退款',
       model: product.model,
     });
-    const statusCode = error.statusCode && error.statusCode < 500 ? error.statusCode : 500;
-    throw new HttpError(statusCode, `${error.message || 'AI 调用失败'}，本次扣费已自动退回`, {
-      wallet: refunded.wallet,
-      report: refunded.order,
-    });
+    const statusCode = error.statusCode && error.statusCode < 500
+      ? error.statusCode
+      : 500;
+    throw new HttpError(
+      statusCode,
+      `${error.message || 'AI 调用失败'}，本次扣费已自动退回`,
+      {
+        wallet: refunded.wallet,
+        report: refunded.order,
+      },
+    );
   }
 }
 

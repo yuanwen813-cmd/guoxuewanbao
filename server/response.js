@@ -1,3 +1,5 @@
+const { allowedCorsOrigin, isProductionRuntime } = require('./security');
+
 class HttpError extends Error {
   constructor(statusCode, message, details) {
     super(message);
@@ -7,9 +9,21 @@ class HttpError extends Error {
   }
 }
 
-function setCors(res) {
+function setCors(res, req) {
   if (typeof res.setHeader === 'function') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    const origin =
+      req?.headers?.origin ||
+      req?.headers?.Origin ||
+      res.req?.headers?.origin ||
+      res.req?.headers?.Origin ||
+      '';
+    const allowedOrigin = allowedCorsOrigin(origin);
+    if (allowedOrigin) {
+      res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+      res.setHeader('Vary', 'Origin');
+    } else if (!isProductionRuntime()) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
     res.setHeader(
       'Access-Control-Allow-Headers',
       'Authorization, Content-Type, X-Requested-With',
@@ -40,11 +54,17 @@ function parseUrl(req) {
   return new URL(req.url || '/', 'https://guoxueapp.local');
 }
 
-async function readJson(req) {
+async function readJson(req, { maxBytes = 128 * 1024 } = {}) {
   if (req.body && typeof req.body === 'object') return req.body;
   const chunks = [];
+  let total = 0;
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.length;
+    if (total > maxBytes) {
+      throw new HttpError(413, '请求内容过大');
+    }
+    chunks.push(buffer);
   }
   const raw = Buffer.concat(chunks).toString('utf8');
   if (!raw.trim()) return {};
@@ -57,7 +77,7 @@ async function readJson(req) {
 
 function handleApi(allowedMethods, handler) {
   return async function apiHandler(req, res) {
-    setCors(res);
+    setCors(res, req);
     if (req.method === 'OPTIONS') {
       if (typeof res.status === 'function') return res.status(204).end();
       res.writeHead(204);
@@ -79,7 +99,7 @@ function handleApi(allowedMethods, handler) {
       };
       if (error.details?.wallet) body.wallet = error.details.wallet;
       if (error.details?.report) body.report = error.details.report;
-      if (process.env.NODE_ENV !== 'production' && error.details) {
+      if (!isProductionRuntime() && error.details) {
         body.details = error.details;
       }
       return sendJson(res, statusCode, body);
