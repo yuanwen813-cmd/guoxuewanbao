@@ -5,18 +5,37 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/common/common_result_models.dart';
 import '../../domain/history/divination_history.dart';
+import '../../features/auth/auth_store.dart';
 import '../local_persistence/local_json_store.dart';
 
 /// 历史记录服务。
 ///
 /// Web 本地预览下写入浏览器 localStorage；测试/非 Web 环境使用内存兜底。
 class HistoryService extends ChangeNotifier {
-  static const _storageKey = 'guoxueapp.divination_history.v1';
+  static const _storageKeyPrefix = 'guoxueapp.divination_history.v1';
 
   final List<DivinationHistory> _records = [];
+  final String ownerKey;
+  final String _storageKey;
 
-  HistoryService() {
+  HistoryService({String? ownerKey})
+      : ownerKey = _normalizeOwnerKey(ownerKey),
+        _storageKey = '$_storageKeyPrefix.${_normalizeOwnerKey(ownerKey)}' {
     _load();
+  }
+
+  static String ownerKeyFromAuth(AuthState auth) {
+    final user = auth.user;
+    if (auth.isAuthenticated && user != null) {
+      if (user.id.isNotEmpty) return 'user_${user.id}';
+      if (user.phone?.isNotEmpty == true) return 'phone_${user.phone}';
+    }
+    return 'guest';
+  }
+
+  static String _normalizeOwnerKey(String? raw) {
+    final value = raw == null || raw.trim().isEmpty ? 'guest' : raw.trim();
+    return value.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '_');
   }
 
   void save(DivinationHistory record) {
@@ -228,5 +247,7 @@ class HistoryService extends ChangeNotifier {
   }
 }
 
-final historyServiceProvider =
-    ChangeNotifierProvider<HistoryService>((ref) => HistoryService());
+final historyServiceProvider = ChangeNotifierProvider<HistoryService>((ref) {
+  final auth = ref.watch(authStoreProvider);
+  return HistoryService(ownerKey: HistoryService.ownerKeyFromAuth(auth));
+});

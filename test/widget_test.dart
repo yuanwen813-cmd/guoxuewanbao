@@ -416,6 +416,41 @@ void main() {
     expect(restored.aiReports.single.text, contains('历史复看时应直接展示'));
   });
 
+  test('history records are isolated by login owner', () async {
+    final suffix = DateTime.now().microsecondsSinceEpoch;
+    final ownerA = 'user_a_$suffix';
+    final ownerB = 'user_b_$suffix';
+    final recordId = 'owner_scoped_history_$suffix';
+    final result = _coinResult(summary: 'owner scoped history $suffix');
+
+    final userAHistory = HistoryService(ownerKey: ownerA);
+    final userBHistory = HistoryService(ownerKey: ownerB);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+
+    userAHistory.save(
+      DivinationHistory(
+        id: recordId,
+        featureId: result.featureId,
+        featureName: result.featureName,
+        question: result.userQuestion,
+        createdAt: result.createdAt,
+        summary: result.summary,
+        resultJson: jsonEncode(result.toJson()),
+        tags: result.tags ?? const [],
+      ),
+    );
+
+    expect(userAHistory.getById(recordId), isNotNull);
+    expect(userBHistory.getById(recordId), isNull);
+
+    final reloadedAHistory = HistoryService(ownerKey: ownerA);
+    final reloadedBHistory = HistoryService(ownerKey: ownerB);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+
+    expect(reloadedAHistory.getById(recordId), isNotNull);
+    expect(reloadedBHistory.getById(recordId), isNull);
+  });
+
   testWidgets('saved AI report is shown without another generate action',
       (tester) async {
     await tester.pumpWidget(
