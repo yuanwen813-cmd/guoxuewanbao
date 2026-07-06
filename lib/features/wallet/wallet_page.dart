@@ -25,7 +25,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
   String? _pageError;
   bool _customMode = false;
   bool _submitting = false;
-  String _provider = 'wechat';
+  String _provider = 'alipay';
   int? _selectedAmountCents;
   RechargeCreateResult? _latestRecharge;
   Timer? _pollTimer;
@@ -512,7 +512,7 @@ class _WalletSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '余额用于 AI 解析扣费。支付完成后以微信或支付宝异步回调入账为准，前端支付成功不会直接增加余额。',
+            '余额用于 AI 解析扣费。支付完成后以支付宝异步回调入账为准，前端支付成功不会直接增加余额。',
             style: GuoXueTypography.caption.copyWith(
               color: GuoXueColors.inkGray,
               height: 1.4,
@@ -556,12 +556,6 @@ class _ProviderSelector extends StatelessWidget {
         Wrap(
           spacing: 10,
           children: [
-            ChoiceChip(
-              key: const Key('wallet_provider_wechat'),
-              selected: provider == 'wechat',
-              onSelected: submitting ? null : (_) => onChanged('wechat'),
-              label: const Text('微信充值'),
-            ),
             ChoiceChip(
               key: const Key('wallet_provider_alipay'),
               selected: provider == 'alipay',

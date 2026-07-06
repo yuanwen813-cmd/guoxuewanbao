@@ -183,6 +183,10 @@ void main() {
     );
     await tester.pump();
 
+    expect(find.byKey(const Key('wallet_provider_alipay')), findsOneWidget);
+    expect(find.byKey(const Key('wallet_provider_wechat')), findsNothing);
+    expect(find.text('支付宝充值'), findsOneWidget);
+    expect(find.text('微信充值'), findsNothing);
     expect(find.byKey(const Key('wallet_recharge_100')), findsOneWidget);
     expect(find.byKey(const Key('wallet_custom_option')), findsOneWidget);
     expect(find.byKey(const Key('wallet_custom_amount')), findsNothing);
