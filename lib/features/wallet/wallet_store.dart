@@ -324,6 +324,11 @@ class WalletStore extends StateNotifier<WalletState> {
     await _persist();
   }
 
+  Future<void> clearLocalSession() async {
+    state = const WalletState();
+    await _persist();
+  }
+
   Future<WalletChargeResult> charge({
     required int amountCents,
     required String title,

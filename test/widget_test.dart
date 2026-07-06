@@ -10,6 +10,7 @@ import 'package:guoxueapp/features/ai_reports/ai_report_product_panel.dart';
 import 'package:guoxueapp/features/ai_reports/ai_report_product_config.dart';
 import 'package:guoxueapp/features/auth/auth_store.dart';
 import 'package:guoxueapp/features/result_common/common_divination_result_page.dart';
+import 'package:guoxueapp/features/v2/mine_home_page.dart';
 import 'package:guoxueapp/features/wallet/wallet_page.dart';
 import 'package:guoxueapp/features/wallet/wallet_store.dart';
 import 'package:guoxueapp/domain/history/divination_history.dart';
@@ -108,7 +109,53 @@ void main() {
     );
     expect(wallet.state.balanceCents, 600);
 
+    await wallet.clearLocalSession();
+    expect(wallet.state.balanceCents, 0);
+    expect(wallet.state.transactions, isEmpty);
+
     expect(wallet.rechargeYuan(0), throwsArgumentError);
+  });
+
+  testWidgets('mine page shows logout confirmation for signed in user',
+      (tester) async {
+    final wallet = WalletStore(useServer: false);
+    await wallet.rechargeYuan(10);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          walletStoreProvider.overrideWith((ref) => wallet),
+          authStoreProvider.overrideWith(
+            (ref) => AuthStore(
+              initialState: const AuthState(
+                initialized: true,
+                token: 'test-token',
+                user: AppUser(id: 'test-user', phone: '13800000000'),
+              ),
+            ),
+          ),
+        ],
+        child: const MaterialApp(
+          home: MineHomePage(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('退出登录'), findsOneWidget);
+
+    await tester.tap(find.text('退出登录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('确定退出当前账号吗？退出后不会删除你的余额、订单和 AI 报告，重新登录同一手机号仍可查看。'),
+        findsOneWidget);
+    expect(find.text('取消'), findsOneWidget);
+
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.text('退出登录'), findsOneWidget);
   });
 
   testWidgets('wallet custom amount switches from fixed options',
