@@ -26,6 +26,16 @@ function mapTransaction(row) {
   };
 }
 
+function mapRegistrationBonus(row) {
+  return {
+    eligible: Boolean(row?.eligible),
+    granted: Boolean(row?.granted),
+    alreadyGranted: Boolean(row?.already_granted),
+    wallet: mapWallet(row?.wallet),
+    transaction: row?.transaction ? mapTransaction(row.transaction) : null,
+  };
+}
+
 function mapRechargeOrder(row) {
   return {
     id: row.id,
@@ -76,6 +86,28 @@ async function getWallet(userId) {
     .single();
   if (error) throw new HttpError(500, '钱包读取失败', error.message);
   return mapWallet(data);
+}
+
+async function grantRegistrationBonusIfEligible(userId) {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase.rpc('grant_registration_bonus', {
+    p_user_id: userId,
+  });
+  if (error) {
+    const message = String(error.message || '');
+    if (error.code === 'PGRST202' || message.includes('grant_registration_bonus')) {
+      return {
+        eligible: false,
+        granted: false,
+        alreadyGranted: false,
+        wallet: null,
+        transaction: null,
+        schemaUnavailable: true,
+      };
+    }
+    throw new HttpError(500, '注册赠送余额处理失败', error.message);
+  }
+  return mapRegistrationBonus(data || {});
 }
 
 async function listWalletTransactions(userId, { page = 1, pageSize = 30 } = {}) {
@@ -305,6 +337,7 @@ module.exports = {
   createAiReportDebit,
   completeAiReport,
   createRechargeOrder,
+  grantRegistrationBonusIfEligible,
   getAiReportForUser,
   getRechargeOrderForUser,
   getWallet,

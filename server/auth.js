@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { getAliyunSmsStatus, sendAliyunSmsCode } = require('./aliyunSms');
 const { getSupabaseServiceClient } = require('./supabaseClient');
 const { HttpError } = require('./response');
+const { grantRegistrationBonusIfEligible } = require('./walletService');
 
 const mainlandMobilePattern = /^1[3-9]\d{9}$/;
 
@@ -331,7 +332,20 @@ async function ensureBusinessUser(authUser) {
     p_phone: phone,
   });
   if (error) throw new HttpError(500, '用户账户初始化失败', error.message);
-  return mapBusinessPayload(data);
+  const business = mapBusinessPayload(data);
+  const bonus = await grantRegistrationBonusIfEligible(business.user.id);
+  if (bonus.wallet) {
+    business.wallet = {
+      ...bonus.wallet,
+      transactions: [],
+    };
+  }
+  business.registrationBonus = {
+    eligible: bonus.eligible,
+    granted: bonus.granted,
+    alreadyGranted: bonus.alreadyGranted,
+  };
+  return business;
 }
 
 async function requireUser(req) {

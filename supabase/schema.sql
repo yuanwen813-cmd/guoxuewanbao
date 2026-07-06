@@ -189,6 +189,104 @@ begin
 end;
 $$;
 
+create or replace function grant_registration_bonus(
+  p_user_id uuid
+) returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_user app_users%rowtype;
+  v_wallet wallets%rowtype;
+  v_transaction wallet_transactions%rowtype;
+  v_amount_cents bigint := 1000;
+  v_cutoff_exclusive timestamptz := '2026-07-30 16:00:00+00';
+  v_ref_id text;
+begin
+  select * into v_user
+  from app_users
+  where id = p_user_id
+  for update;
+
+  if not found then
+    raise exception 'USER_NOT_FOUND';
+  end if;
+
+  insert into wallets(user_id)
+  values (v_user.id)
+  on conflict (user_id) do update
+    set updated_at = wallets.updated_at
+  returning * into v_wallet;
+
+  v_ref_id := 'registration_bonus_before_20260730:' || v_user.id::text;
+
+  select * into v_transaction
+  from wallet_transactions
+  where user_id = v_user.id
+    and type = 'manual_adjust'
+    and ref_type = 'admin_adjust'
+    and ref_id = v_ref_id
+  limit 1;
+
+  if found then
+    return jsonb_build_object(
+      'eligible', v_user.created_at < v_cutoff_exclusive,
+      'granted', false,
+      'already_granted', true,
+      'wallet', to_jsonb(v_wallet),
+      'transaction', to_jsonb(v_transaction)
+    );
+  end if;
+
+  if v_user.created_at >= v_cutoff_exclusive then
+    return jsonb_build_object(
+      'eligible', false,
+      'granted', false,
+      'already_granted', false,
+      'wallet', to_jsonb(v_wallet)
+    );
+  end if;
+
+  update wallets
+  set balance_cents = balance_cents + v_amount_cents,
+      updated_at = now()
+  where id = v_wallet.id
+  returning * into v_wallet;
+
+  insert into wallet_transactions(
+    user_id,
+    wallet_id,
+    type,
+    amount_cents,
+    balance_after_cents,
+    currency,
+    ref_type,
+    ref_id,
+    note
+  )
+  values (
+    v_user.id,
+    v_wallet.id,
+    'manual_adjust',
+    v_amount_cents,
+    v_wallet.balance_cents,
+    v_wallet.currency,
+    'admin_adjust',
+    v_ref_id,
+    '2026年7月30日前注册赠送余额'
+  )
+  returning * into v_transaction;
+
+  return jsonb_build_object(
+    'eligible', true,
+    'granted', true,
+    'already_granted', false,
+    'wallet', to_jsonb(v_wallet),
+    'transaction', to_jsonb(v_transaction)
+  );
+end;
+$$;
+
 create or replace function create_recharge_order(
   p_user_id uuid,
   p_provider text,
