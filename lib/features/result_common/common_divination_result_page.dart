@@ -6,6 +6,8 @@ import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_decoration.dart';
 import '../../app/theme/guoxue_typography.dart';
 import '../../domain/common/common_result_models.dart';
+import '../../domain/history/divination_history.dart';
+import '../../infrastructure/history_service/history_service.dart';
 import '../../shared/disclaimer/disclaimer_block.dart';
 import '../../shared/widgets/classical_card.dart';
 import '../../shared/widgets/guoxue_button.dart';
@@ -13,7 +15,7 @@ import '../ai_reports/ai_report_product_config.dart';
 import '../ai_reports/ai_report_product_panel.dart';
 
 /// 通用占卜结果页 —— 所有国学功能复用
-class CommonDivinationResultPage extends StatelessWidget {
+class CommonDivinationResultPage extends ConsumerWidget {
   final CommonDivinationResult result;
   final VoidCallback? onAIInterpret;
   final VoidCallback? onSave;
@@ -38,7 +40,7 @@ class CommonDivinationResultPage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: Text(result.featureName),
@@ -68,7 +70,7 @@ class CommonDivinationResultPage extends StatelessWidget {
             const SizedBox(height: 16),
             _buildDisclaimers(),
             const SizedBox(height: 16),
-            _buildActions(),
+            _buildActions(ref),
           ],
         ),
       ),
@@ -304,7 +306,7 @@ class CommonDivinationResultPage extends StatelessWidget {
     );
   }
 
-  Widget _buildActions() {
+  Widget _buildActions(WidgetRef ref) {
     final aiReportFeatureKey = _aiReportFeatureKey;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if (aiReportFeatureKey != null) ...[
@@ -317,6 +319,29 @@ class CommonDivinationResultPage extends StatelessWidget {
             sourceJson: const JsonEncoder.withIndent('  ').convert(
               result.toJson(),
             ),
+            initialReports: result.aiReports,
+            onReportGenerated: (report) {
+              final historyService = ref.read(historyServiceProvider);
+              final attached =
+                  historyService.attachAiReportToResult(result, report);
+              if (!attached) {
+                final updatedResult = result.copyWithAiReport(report);
+                historyService.save(
+                  DivinationHistory(
+                    id: 'ai_${result.featureId}_${DateTime.now().millisecondsSinceEpoch}',
+                    featureId: result.featureId,
+                    featureName: result.featureName,
+                    question: result.userQuestion,
+                    createdAt: result.createdAt,
+                    summary: result.summary,
+                    resultJson: const JsonEncoder().convert(
+                      updatedResult.toJson(),
+                    ),
+                    tags: result.tags ?? const [],
+                  ),
+                );
+              }
+            },
           ),
         ),
       ] else if (aiInterpreting)
@@ -400,6 +425,19 @@ class CommonDivinationResultPage extends StatelessWidget {
     if (r.changedHexagram != null)
       buf.writeln('变卦：${r.changedHexagram!.name} ${r.changedHexagram!.symbol}');
     if (r.finalVerdict != null) buf.writeln('综合：${r.finalVerdict}');
+    if (r.aiReports.isNotEmpty) {
+      buf.writeln();
+      buf.writeln('【AI 解析】');
+      for (final report in r.aiReports) {
+        buf.writeln(
+            '${report.title}${report.priceLabel.isNotEmpty ? '（${report.priceLabel}）' : ''}');
+        if (report.focus != null && report.focus!.trim().isNotEmpty) {
+          buf.writeln('关注方向：${report.focus}');
+        }
+        buf.writeln(report.text.trim());
+        buf.writeln();
+      }
+    }
     buf.writeln();
     buf.writeln('—— 国学万宝匣 · 仅供传统文化研究参考 ——');
     return buf.toString();

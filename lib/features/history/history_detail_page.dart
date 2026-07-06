@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../domain/common/common_result_models.dart';
 import '../../domain/history/divination_history.dart';
 import '../../features/result_common/common_divination_result_page.dart';
@@ -38,10 +40,31 @@ class HistoryDetailPage extends ConsumerWidget {
               width: double.maxFinite,
               height: 400,
               child: SingleChildScrollView(
-                child: SelectableText(text, style: const TextStyle(fontSize: 13)),
+                child:
+                    SelectableText(text, style: const TextStyle(fontSize: 13)),
               ),
             ),
-            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('关闭'))],
+            actions: [
+              TextButton.icon(
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: text));
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('分享内容已复制')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.copy_all_outlined),
+                label: const Text('复制'),
+              ),
+              TextButton.icon(
+                onPressed: () => Share.share(text),
+                icon: const Icon(Icons.ios_share_outlined),
+                label: const Text('系统分享'),
+              ),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx), child: const Text('关闭')),
+            ],
           ),
         );
       },

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_typography.dart';
+import '../../domain/common/common_result_models.dart';
 import '../auth/auth_store.dart';
 import '../wallet/server_wallet_api.dart';
 import '../wallet/wallet_store.dart';
@@ -14,6 +17,8 @@ class AiReportProductPanel extends ConsumerStatefulWidget {
   final String? sourceSummary;
   final String? sourceJson;
   final String? initialFocus;
+  final List<AiReportSnapshot> initialReports;
+  final ValueChanged<AiReportSnapshot>? onReportGenerated;
 
   const AiReportProductPanel({
     super.key,
@@ -21,6 +26,8 @@ class AiReportProductPanel extends ConsumerStatefulWidget {
     this.sourceSummary,
     this.sourceJson,
     this.initialFocus,
+    this.initialReports = const [],
+    this.onReportGenerated,
   });
 
   @override
@@ -38,6 +45,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   void initState() {
     super.initState();
     _applyInitialFocus();
+    _applyInitialReports();
   }
 
   @override
@@ -46,6 +54,9 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
     if (oldWidget.initialFocus != widget.initialFocus &&
         _focusController.text.trim().isEmpty) {
       _applyInitialFocus();
+    }
+    if (oldWidget.initialReports != widget.initialReports) {
+      _applyInitialReports();
     }
   }
 
@@ -59,6 +70,15 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
     final focus = widget.initialFocus?.trim();
     if (focus != null && focus.isNotEmpty) {
       _focusController.text = focus;
+    }
+  }
+
+  void _applyInitialReports() {
+    for (final report in widget.initialReports) {
+      final text = report.text.trim();
+      if (report.productId.isNotEmpty && text.isNotEmpty) {
+        _answers.putIfAbsent(report.productId, () => text);
+      }
     }
   }
 
@@ -224,6 +244,20 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
         _answers[config.id] =
             result.answer.trim().isEmpty ? 'AI 服务未返回内容。' : result.answer.trim();
       });
+      widget.onReportGenerated?.call(
+        AiReportSnapshot(
+          productId: config.id,
+          featureKey: config.featureKey,
+          title: config.buttonTitle,
+          reportType: config.reportType,
+          priceLabel: config.priceLabel,
+          text: _answers[config.id]!,
+          model: result.model,
+          reportId: result.reportId,
+          focus: focus,
+          createdAt: DateTime.now(),
+        ),
+      );
     } on ServerWalletException catch (error) {
       if (error.wallet != null) {
         await ref
@@ -303,6 +337,7 @@ class _AiReportProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasAnswer = answer?.trim().isNotEmpty == true;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -354,15 +389,18 @@ class _AiReportProductTile extends StatelessWidget {
               const SizedBox(width: 10),
               FilledButton.icon(
                 key: Key('ai_report_${config.id}'),
-                onPressed: loading || !config.enabled ? null : onGenerate,
+                onPressed:
+                    loading || !config.enabled || hasAnswer ? null : onGenerate,
                 icon: loading
                     ? const SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.psychology_alt_outlined),
-                label: Text(loading ? '生成中' : '生成报告'),
+                    : hasAnswer
+                        ? const Icon(Icons.check_circle_outline)
+                        : const Icon(Icons.psychology_alt_outlined),
+                label: Text(loading ? '生成中' : (hasAnswer ? '已生成' : '生成报告')),
               ),
             ],
           ),
@@ -399,10 +437,48 @@ class _AiReportProductTile extends StatelessWidget {
                 height: 1.55,
               ),
             ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  key: Key('ai_report_copy_${config.id}'),
+                  onPressed: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: _shareText(answer!)),
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('AI 解析内容已复制')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.copy_all_outlined),
+                  label: const Text('复制解析'),
+                ),
+                OutlinedButton.icon(
+                  key: Key('ai_report_share_${config.id}'),
+                  onPressed: () => Share.share(_shareText(answer!)),
+                  icon: const Icon(Icons.ios_share_outlined),
+                  label: const Text('系统分享'),
+                ),
+              ],
+            ),
           ],
         ],
       ),
     );
+  }
+
+  String _shareText(String text) {
+    return [
+      '【国学万宝匣】${config.buttonTitle}',
+      '',
+      text.trim(),
+      '',
+      '以上内容仅供传统文化参考。'
+    ].join('\n');
   }
 }
 

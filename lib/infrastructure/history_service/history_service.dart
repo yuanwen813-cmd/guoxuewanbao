@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/common/common_result_models.dart';
 import '../../domain/history/divination_history.dart';
 import '../local_persistence/local_json_store.dart';
 
@@ -41,6 +42,36 @@ class HistoryService extends ChangeNotifier {
     _records.removeWhere((r) => r.id == id);
     _persist();
     notifyListeners();
+  }
+
+  bool attachAiReportToResult(
+    CommonDivinationResult result,
+    AiReportSnapshot report,
+  ) {
+    final idx = _records.indexWhere((record) => _matchesResult(record, result));
+    if (idx < 0) return false;
+
+    final old = _records[idx];
+    final raw = Map<String, dynamic>.from(old.resultSnapshot);
+    final restored = CommonDivinationResult.fromJson(raw);
+    final updatedResult = restored.copyWithAiReport(report);
+    final updatedSnapshot = Map<String, dynamic>.from(raw)
+      ..addAll(updatedResult.toJson());
+
+    _records[idx] = DivinationHistory(
+      id: old.id,
+      featureId: old.featureId,
+      featureName: old.featureName,
+      question: old.question,
+      createdAt: old.createdAt,
+      summary: old.summary,
+      resultJson: const JsonEncoder().convert(updatedSnapshot),
+      tags: old.tags,
+      isFavorite: old.isFavorite,
+    );
+    _persist();
+    notifyListeners();
+    return true;
   }
 
   void toggleFavorite(String id) {
@@ -137,6 +168,26 @@ class HistoryService extends ChangeNotifier {
   }
 
   int get favoriteCount => _records.where((r) => r.isFavorite).length;
+
+  bool _matchesResult(
+    DivinationHistory record,
+    CommonDivinationResult result,
+  ) {
+    if (record.featureId != result.featureId) return false;
+    try {
+      final snapshot = record.resultSnapshot;
+      if (snapshot['createdAt'] == result.createdAt.toIso8601String()) {
+        return true;
+      }
+      return (snapshot['summary'] as String? ?? record.summary) ==
+              result.summary &&
+          (snapshot['userQuestion'] as String? ?? record.question) ==
+              result.userQuestion;
+    } catch (_) {
+      return record.summary == result.summary &&
+          record.question == result.userQuestion;
+    }
+  }
 
   Future<void> _load() async {
     try {

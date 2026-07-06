@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,8 @@ import 'package:guoxueapp/features/auth/auth_store.dart';
 import 'package:guoxueapp/features/result_common/common_divination_result_page.dart';
 import 'package:guoxueapp/features/wallet/wallet_page.dart';
 import 'package:guoxueapp/features/wallet/wallet_store.dart';
+import 'package:guoxueapp/domain/history/divination_history.dart';
+import 'package:guoxueapp/infrastructure/history_service/history_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -301,6 +304,110 @@ void main() {
     await tester.pump();
 
     expect(find.text('请先输入想重点了解的事项。'), findsOneWidget);
+  });
+
+  test('share text includes saved AI report snapshots', () {
+    final result = _coinResult().copyWithAiReport(
+      AiReportSnapshot(
+        productId: 'coin_hexagram_question_brief',
+        featureKey: AiReportFeatureKeys.coinHexagram,
+        title: '¥1 简析',
+        reportType: 'question_brief',
+        priceLabel: '¥1',
+        text: '这是一段已经付费生成并保存的 AI 解析内容。',
+        focus: '合作是否顺利',
+        createdAt: DateTime(2026, 7, 3, 10),
+      ),
+    );
+
+    final restored = CommonDivinationResult.fromJson(result.toJson());
+    final shareText = CommonDivinationResultPage.buildShareText(restored);
+
+    expect(restored.aiReports, hasLength(1));
+    expect(shareText, contains('【AI 解析】'));
+    expect(shareText, contains('这是一段已经付费生成并保存的 AI 解析内容。'));
+  });
+
+  test('history record can attach and restore AI report snapshot', () {
+    final service = HistoryService();
+    final result = _coinResult();
+    final id =
+        'history_ai_report_test_${DateTime.now().microsecondsSinceEpoch}';
+    service.save(
+      DivinationHistory(
+        id: id,
+        featureId: result.featureId,
+        featureName: result.featureName,
+        question: result.userQuestion,
+        createdAt: result.createdAt,
+        summary: result.summary,
+        resultJson: jsonEncode(result.toJson()),
+        tags: result.tags ?? const [],
+      ),
+    );
+
+    final attached = service.attachAiReportToResult(
+      result,
+      AiReportSnapshot(
+        productId: 'coin_hexagram_question_brief',
+        featureKey: AiReportFeatureKeys.coinHexagram,
+        title: '¥1 简析',
+        reportType: 'question_brief',
+        priceLabel: '¥1',
+        text: '历史复看时应直接展示这段 AI 解析。',
+        createdAt: DateTime(2026, 7, 3, 10),
+      ),
+    );
+
+    final saved = service.getById(id)!;
+    final restored = CommonDivinationResult.fromJson(saved.resultSnapshot);
+
+    expect(attached, isTrue);
+    expect(restored.aiReports.single.text, contains('历史复看时应直接展示'));
+  });
+
+  testWidgets('saved AI report is shown without another generate action',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          walletStoreProvider.overrideWith(
+            (ref) => WalletStore(useServer: false),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AiReportProductPanel(
+                featureKey: AiReportFeatureKeys.coinHexagram,
+                sourceSummary: 'coin result',
+                initialReports: [
+                  AiReportSnapshot(
+                    productId: 'coin_hexagram_question_brief',
+                    featureKey: AiReportFeatureKeys.coinHexagram,
+                    title: '¥1 简析',
+                    reportType: 'question_brief',
+                    priceLabel: '¥1',
+                    text: '已保存的 AI 解析内容。',
+                    createdAt: DateTime(2026, 7, 3, 10),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('已保存的 AI 解析内容。'), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_copy_coin_hexagram_question_brief')),
+        findsOneWidget);
+
+    final button = tester.widget<FilledButton>(
+      find.byKey(const Key('ai_report_coin_hexagram_question_brief')),
+    );
+    expect(button.onPressed, isNull);
   });
 
   test('stable route paths remain registered', () {
