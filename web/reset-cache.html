@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>清理本地预览缓存</title>
+  <title>清理浏览器缓存｜国学万宝匣</title>
   <style>
     body {
       margin: 0;
@@ -38,11 +38,11 @@
 </head>
 <body>
   <main>
-    <h1>正在清理本地预览缓存</h1>
+    <h1>正在清理浏览器缓存</h1>
     <p id="status">请稍候，完成后会自动返回国学万宝匣。</p>
   </main>
   <script>
-    (async function resetLocalPreviewCache() {
+    (async function resetBrowserCache() {
       const status = document.getElementById('status');
 
       try {
@@ -56,12 +56,12 @@
           await Promise.all(names.map((name) => caches.delete(name)));
         }
 
-        status.textContent = '缓存已清理，正在重新打开本地预览。';
+        status.textContent = '缓存已清理，正在重新打开国学万宝匣。';
       } catch (error) {
-        status.textContent = '缓存清理未完全成功，将继续尝试重新打开本地预览。';
+        status.textContent = '缓存清理未完全成功，将继续尝试重新打开国学万宝匣。';
       }
 
-      window.location.replace('/?local_preview=' + Date.now());
+      window.location.replace('/?cache_reset=' + Date.now());
     })();
   </script>
 </body>

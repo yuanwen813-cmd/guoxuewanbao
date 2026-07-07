@@ -455,6 +455,31 @@ void main() {
     expect(reloadedBHistory.getById(recordId), isNull);
   });
 
+  test('web cache reset files prevent stale Flutter shell', () {
+    final vercel = File('vercel.json').readAsStringSync();
+    final index = File('web/index.html').readAsStringSync();
+    final resetCache = File('web/reset-cache.html').readAsStringSync();
+
+    for (final path in [
+      '/',
+      '/index.html',
+      '/flutter_bootstrap.js',
+      '/flutter_service_worker.js',
+      '/main.dart.js',
+      '/manifest.json',
+      '/reset-cache.html',
+    ]) {
+      expect(vercel, contains('"source": "$path"'));
+    }
+
+    expect(vercel, contains('no-store, max-age=0'));
+    expect(vercel, contains('no-cache, max-age=0, must-revalidate'));
+    expect(index, contains('flutter_bootstrap.js?v=20260707-cache1'));
+    expect(index, contains('manifest.json?v=20260707-cache1'));
+    expect(resetCache, contains('正在清理浏览器缓存'));
+    expect(resetCache, contains('cache_reset='));
+  });
+
   testWidgets('saved AI report is shown without another generate action',
       (tester) async {
     await tester.pumpWidget(
