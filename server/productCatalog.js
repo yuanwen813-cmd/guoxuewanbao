@@ -36,15 +36,7 @@ const aiProducts = {
     reportType: 'bazi_deep',
     priceCents: 690,
     model: 'deepseek-v4-pro',
-    maxTokens: 8192,
-    enabled: true,
-  },
-  bazi_custom_13_9: {
-    id: 'bazi_custom_13_9',
-    reportType: 'bazi_custom',
-    priceCents: 1390,
-    model: 'deepseek-v4-pro',
-    maxTokens: 8192,
+    maxTokens: 12000,
     enabled: true,
   },
   ziwei_reserved: {

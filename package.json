@@ -4,7 +4,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "check:api": "node --check api/index.js && node --check server/auth.js && node --check server/aliyunSms.js"
+    "check:api": "node --check api/index.js && node --check server/auth.js && node --check server/aliyunSms.js && node --check server/promptLoader.js && node --check server/aiReportService.js"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^4.6.0",

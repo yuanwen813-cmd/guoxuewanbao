@@ -6,6 +6,7 @@ const {
   getAiReportForUser,
   refundAiReport,
 } = require('./walletService');
+const { buildAiReportSystemPrompt } = require('./promptLoader');
 
 const DEEPSEEK_BASE_URL =
   process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
@@ -15,7 +16,14 @@ function maxPromptChars() {
 }
 
 function maxSystemPromptChars() {
-  return Math.max(1000, Number(process.env.AI_SYSTEM_PROMPT_MAX_CHARS || 6000));
+  return Math.max(1000, Number(process.env.AI_SYSTEM_PROMPT_MAX_CHARS || 14000));
+}
+
+function maxClientSystemPromptChars() {
+  return Math.max(
+    500,
+    Number(process.env.AI_CLIENT_SYSTEM_PROMPT_MAX_CHARS || 3000),
+  );
 }
 
 function maxInputSnapshotChars() {
@@ -78,14 +86,19 @@ async function generateAiReport({ userId, body }) {
   if (!product.enabled) {
     throw new HttpError(400, product.disabledReason || '该 AI 解析档位暂未开放');
   }
-  if (!body.userPrompt || !body.systemPrompt) {
+  if (!body.userPrompt) {
     throw new HttpError(400, 'AI 解析缺少必要内容');
   }
 
   const title = assertTextLimit('标题', body.title || '', 200);
+  const clientSystemPrompt = assertTextLimit(
+    '页面补充提示词',
+    body.systemPrompt || '',
+    maxClientSystemPromptChars(),
+  );
   const systemPrompt = assertTextLimit(
     '系统提示词',
-    body.systemPrompt,
+    buildAiReportSystemPrompt(clientSystemPrompt),
     maxSystemPromptChars(),
   );
   const userPrompt = assertTextLimit('解析问题', body.userPrompt, maxPromptChars());

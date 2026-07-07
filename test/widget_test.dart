@@ -53,15 +53,17 @@ void main() {
       'one_yuan',
       'standard_3_9',
       'advanced_6_9',
-      'custom_13_9',
     ]);
     expect(bazi.map((item) => item.modelId), [
       AiReportModelIds.deepseekV4Flash,
       AiReportModelIds.deepseekV4Pro,
       AiReportModelIds.deepseekV4Pro,
-      AiReportModelIds.deepseekV4Pro,
     ]);
     expect(bazi.every((item) => item.enabled), isTrue);
+    expect(
+      bazi.firstWhere((item) => item.id == 'bazi_deep_6_9').maxWords,
+      12000,
+    );
     expect(ziwei.map((item) => item.priceTier), [
       'one_yuan',
       'standard_3_9',
@@ -84,7 +86,7 @@ void main() {
         tieban.every((item) => item.modelId == AiReportModelIds.deepseekV4Pro),
         isTrue);
     expect(tieban.every((item) => item.enabled), isFalse);
-    expect(AiReportProductCatalog.byId('bazi_custom_13_9'), isNotNull);
+    expect(AiReportProductCatalog.byId('bazi_custom_13_9'), isNull);
   });
 
   test('local wallet supports recharge charge and refund', () async {
@@ -311,6 +313,11 @@ void main() {
 
     expect(find.text('想重点了解的方向（可选）'), findsOneWidget);
     expect(find.textContaining('不填写则生成整体命盘详解'), findsWidgets);
+    expect(find.byKey(const Key('ai_report_bazi_brief_1')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_bazi_basic_3_9')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_bazi_deep_6_9')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_bazi_custom_13_9')), findsNothing);
+    expect(find.textContaining('¥13.9'), findsNothing);
 
     await tester.tap(find.byKey(const Key('ai_report_bazi_brief_1')));
     await tester.pumpAndSettle();

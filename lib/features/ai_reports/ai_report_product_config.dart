@@ -231,22 +231,9 @@ class AiReportProductCatalog {
       buttonTitle: '¥6.9 深度报告',
       buttonSubtitle: '加入大运、近三年趋势和阶段建议',
       minWords: 6000,
-      maxWords: 8000,
-      enabled: true,
-      promptTemplateId: 'ai_report_bazi_deep_v1',
-    ),
-    AiReportProductConfig(
-      id: 'bazi_custom_13_9',
-      featureKey: AiReportFeatureKeys.bazi,
-      reportType: 'bazi_custom',
-      priceTier: 'custom_13_9',
-      priceLabel: '¥13.9',
-      buttonTitle: '¥13.9 高级专属报告',
-      buttonSubtitle: '命盘、大运、流年、人生阶段综合分析',
-      minWords: 9000,
       maxWords: 12000,
       enabled: true,
-      promptTemplateId: 'ai_report_bazi_premium_v1',
+      promptTemplateId: 'ai_report_bazi_deep_v1',
     ),
     AiReportProductConfig(
       id: 'ziwei_brief',
@@ -385,9 +372,7 @@ class AiReportPromptTemplates {
     'ai_report_bazi_basic_v1':
         '根据八字命盘结构化 JSON 生成 3000-5000 字基础报告。只能解释本地四柱、日主、五行摘要和已提供结构，不得编造大运、流年、神煞或格局。',
     'ai_report_bazi_deep_v1':
-        '根据八字命盘结构化 JSON 生成 6000-8000 字深度报告。大运、流年必须来自输入 JSON；如果未提供，必须写明当前结构化结果未提供，不作展开。',
-    'ai_report_bazi_premium_v1':
-        '根据八字命盘结构化 JSON 生成 9000-12000 字高级专属报告。不得重新计算四柱，不得编造大运、流年、神煞、格局。语言专业但不吓人，不替代现实决策。',
+        '根据八字命盘结构化 JSON 生成 6000-12000 字深度报告，对应总控提示词中的命盘类详细版。大运、流年必须来自输入 JSON；如果未提供，必须写明当前结构化结果未提供，不作展开。',
     'ai_report_ziwei_brief_v1':
         '根据紫微斗数命盘 JSON 生成 800-1200 字简析。若没有命宫、主星、十二宫信息，不得生成报告。AI 不排盘，只解释输入 JSON。',
     'ai_report_ziwei_basic_v1':
