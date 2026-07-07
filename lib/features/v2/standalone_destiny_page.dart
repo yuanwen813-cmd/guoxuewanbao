@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_typography.dart';
@@ -6,6 +7,7 @@ import '../../domain/calendar/ganzhi.dart';
 import 'destiny_ai_explanation_card.dart';
 import 'natal_inference_engine.dart';
 import 'natal_profile_models.dart';
+import 'natal_profile_store.dart';
 import 'v2_page_scaffold.dart';
 
 enum StandaloneDestinyType {
@@ -31,7 +33,12 @@ enum StandaloneDestinyType {
   });
 }
 
-class StandaloneDestinyPage extends StatefulWidget {
+enum _DestinyProfileSource {
+  temporary,
+  saved,
+}
+
+class StandaloneDestinyPage extends ConsumerStatefulWidget {
   final StandaloneDestinyType type;
 
   const StandaloneDestinyPage({
@@ -40,10 +47,11 @@ class StandaloneDestinyPage extends StatefulWidget {
   });
 
   @override
-  State<StandaloneDestinyPage> createState() => _StandaloneDestinyPageState();
+  ConsumerState<StandaloneDestinyPage> createState() =>
+      _StandaloneDestinyPageState();
 }
 
-class _StandaloneDestinyPageState extends State<StandaloneDestinyPage> {
+class _StandaloneDestinyPageState extends ConsumerState<StandaloneDestinyPage> {
   final _formKey = GlobalKey<FormState>();
   final _displayNameController = TextEditingController();
   final _birthDateController = TextEditingController(text: '1990-01-01');
@@ -55,6 +63,7 @@ class _StandaloneDestinyPageState extends State<StandaloneDestinyPage> {
   BirthRelationship _relationship = BirthRelationship.other;
   BirthGender _gender = BirthGender.undisclosed;
   BirthTimeAccuracy _timeAccuracy = BirthTimeAccuracy.unknown;
+  _DestinyProfileSource _profileSource = _DestinyProfileSource.temporary;
   BirthProfile? _profile;
 
   @override
@@ -70,20 +79,92 @@ class _StandaloneDestinyPageState extends State<StandaloneDestinyPage> {
 
   @override
   Widget build(BuildContext context) {
+    final savedProfiles = ref.watch(birthProfileStoreProvider);
     return V2PageScaffold(
       title: widget.type.title,
       subtitle: widget.type.subtitle,
       icon: widget.type.icon,
       showAppBar: true,
       children: [
-        const V2SectionTitle(title: '填写生辰信息'),
-        _buildForm(),
+        const V2SectionTitle(title: '资料来源'),
+        _buildProfileSourceSelector(),
+        const SizedBox(height: 12),
+        if (_profileSource == _DestinyProfileSource.temporary) ...[
+          const V2SectionTitle(title: '填写生辰信息'),
+          _buildForm(),
+        ] else ...[
+          const V2SectionTitle(title: '从命盘档案选择'),
+          _buildSavedProfilePicker(savedProfiles),
+        ],
         if (_profile != null) ...[
           const SizedBox(height: 12),
           _buildResult(_profile!),
         ],
       ],
     );
+  }
+
+  Widget _buildProfileSourceSelector() {
+    return Column(
+      children: [
+        _ProfileSourceCard(
+          key: Key('${widget.type.name}_temporary_source'),
+          title: '临时填写出生资料',
+          subtitle: '直接输入生辰信息，生成本次${widget.type.title}结果。',
+          icon: Icons.edit_note_outlined,
+          selected: _profileSource == _DestinyProfileSource.temporary,
+          onTap: () => _switchProfileSource(_DestinyProfileSource.temporary),
+        ),
+        const SizedBox(height: 10),
+        _ProfileSourceCard(
+          key: Key('${widget.type.name}_saved_source'),
+          title: '从命盘档案选择',
+          subtitle: '复用已保存的出生资料，直接生成${widget.type.title}结果。',
+          icon: Icons.badge_outlined,
+          selected: _profileSource == _DestinyProfileSource.saved,
+          onTap: () => _switchProfileSource(_DestinyProfileSource.saved),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSavedProfilePicker(List<BirthProfile> profiles) {
+    if (profiles.isEmpty) {
+      return _CardBlock(
+        title: '暂无命盘档案',
+        child: Text(
+          '可以先在本页临时填写出生资料，或在八字命理结果页保存为命盘档案后再来选择。',
+          style: GuoXueTypography.caption.copyWith(
+            color: GuoXueColors.inkGray,
+            height: 1.45,
+            letterSpacing: 0,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        for (final profile in profiles)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _SavedProfileChoiceCard(
+              key: Key('${widget.type.name}_saved_profile_${profile.id}'),
+              profile: profile,
+              selected: _profile?.id == profile.id,
+              onTap: () => setState(() => _profile = profile),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _switchProfileSource(_DestinyProfileSource source) {
+    if (_profileSource == source) return;
+    setState(() {
+      _profileSource = source;
+      _profile = null;
+    });
   }
 
   Widget _buildForm() {
@@ -548,6 +629,148 @@ class _ProfileSummaryBlock extends StatelessWidget {
           _SummaryRow(label: '出生地', value: profile.birthPlaceName ?? '未填写'),
           _SummaryRow(label: '时间准确度', value: profile.birthTimeAccuracy.label),
         ],
+      ),
+    );
+  }
+}
+
+class _ProfileSourceCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ProfileSourceCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected
+              ? GuoXueColors.primary.withOpacity(0.08)
+              : GuoXueColors.ricePaper,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected
+                ? GuoXueColors.primary.withOpacity(0.45)
+                : GuoXueColors.gold.withOpacity(0.18),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: GuoXueColors.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GuoXueTypography.body.copyWith(
+                      color: GuoXueColors.inkBlack,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: GuoXueTypography.caption.copyWith(
+                      color: GuoXueColors.inkGray,
+                      height: 1.35,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.check_circle, color: GuoXueColors.primary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SavedProfileChoiceCard extends StatelessWidget {
+  final BirthProfile profile;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SavedProfileChoiceCard({
+    super.key,
+    required this.profile,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected
+              ? GuoXueColors.primary.withOpacity(0.08)
+              : GuoXueColors.ricePaper,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected
+                ? GuoXueColors.primary.withOpacity(0.45)
+                : GuoXueColors.gold.withOpacity(0.18),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.account_circle_outlined,
+                color: GuoXueColors.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    profile.displayName,
+                    style: GuoXueTypography.body.copyWith(
+                      color: GuoXueColors.inkBlack,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${profile.relationship.label} · ${profile.gender.label} · ${profile.birthDateText}',
+                    style: GuoXueTypography.caption.copyWith(
+                      color: GuoXueColors.inkGray,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              const Padding(
+                padding: EdgeInsets.only(left: 8),
+                child: Icon(Icons.check_circle, color: GuoXueColors.primary),
+              ),
+          ],
+        ),
       ),
     );
   }

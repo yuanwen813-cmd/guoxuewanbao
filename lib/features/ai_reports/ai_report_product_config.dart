@@ -245,8 +245,7 @@ class AiReportProductCatalog {
       buttonSubtitle: '快速看命宫、主星和性格轮廓',
       minWords: 800,
       maxWords: 1200,
-      enabled: false,
-      disabledReason: '紫微斗数排盘结构尚未完成，第一版仅预留 AI 报告位。',
+      enabled: true,
       promptTemplateId: 'ai_report_ziwei_brief_v1',
     ),
     AiReportProductConfig(
@@ -259,8 +258,7 @@ class AiReportProductCatalog {
       buttonSubtitle: '命宫、事业、财帛、迁移、夫妻等基础解读',
       minWords: 3000,
       maxWords: 5000,
-      enabled: false,
-      disabledReason: '紫微斗数排盘结构尚未完成，第一版仅预留 AI 报告位。',
+      enabled: true,
       promptTemplateId: 'ai_report_ziwei_basic_v1',
     ),
     AiReportProductConfig(
@@ -273,23 +271,8 @@ class AiReportProductCatalog {
       buttonSubtitle: '十二宫、大限、流年综合分析',
       minWords: 6000,
       maxWords: 9000,
-      enabled: false,
-      disabledReason: '紫微斗数排盘结构尚未完成，第一版仅预留 AI 报告位。',
+      enabled: true,
       promptTemplateId: 'ai_report_ziwei_deep_v1',
-    ),
-    AiReportProductConfig(
-      id: 'ziwei_premium',
-      featureKey: AiReportFeatureKeys.ziweiDoushu,
-      reportType: 'ziwei_premium',
-      priceTier: 'custom_13_9',
-      priceLabel: '¥13.9',
-      buttonTitle: '¥13.9 紫微高级专属报告',
-      buttonSubtitle: '十二宫、大限、流年、人生阶段综合详批',
-      minWords: 9000,
-      maxWords: 13000,
-      enabled: false,
-      disabledReason: '紫微斗数排盘结构尚未完成，第一版仅预留 AI 报告位。',
-      promptTemplateId: 'ai_report_ziwei_premium_v1',
     ),
     AiReportProductConfig(
       id: 'tieban_basic',
@@ -301,8 +284,7 @@ class AiReportProductCatalog {
       buttonSubtitle: '条文含义、命局提示和参考建议',
       minWords: 1500,
       maxWords: 2500,
-      enabled: false,
-      disabledReason: '铁板神数结构尚未完成，第一版仅预留 AI 报告位。',
+      enabled: true,
       promptTemplateId: 'ai_report_tieban_basic_v1',
     ),
     AiReportProductConfig(
@@ -315,23 +297,8 @@ class AiReportProductCatalog {
       buttonSubtitle: '多条文综合、命盘交叉和阶段建议',
       minWords: 4000,
       maxWords: 6000,
-      enabled: false,
-      disabledReason: '铁板神数结构尚未完成，第一版仅预留 AI 报告位。',
+      enabled: true,
       promptTemplateId: 'ai_report_tieban_deep_v1',
-    ),
-    AiReportProductConfig(
-      id: 'tieban_premium',
-      featureKey: AiReportFeatureKeys.tiebanShenshu,
-      reportType: 'tieban_premium',
-      priceTier: 'custom_13_9',
-      priceLabel: '¥13.9',
-      buttonTitle: '¥13.9 专属详批',
-      buttonSubtitle: '条文、命盘、阶段趋势综合详解',
-      minWords: 7000,
-      maxWords: 10000,
-      enabled: false,
-      disabledReason: '铁板神数结构尚未完成，第一版仅预留 AI 报告位。',
-      promptTemplateId: 'ai_report_tieban_premium_v1',
     ),
   ];
 
@@ -379,13 +346,9 @@ class AiReportPromptTemplates {
         '根据紫微斗数命盘 JSON 生成 3000-5000 字基础报告。只解释本地 JSON 中已有的命宫、身宫、主星、十二宫信息，不得编造星曜和宫位。',
     'ai_report_ziwei_deep_v1':
         '根据紫微斗数命盘 JSON 生成 6000-9000 字深度报告。大限和流年必须来自 JSON；不得编造四化、大限、流年。',
-    'ai_report_ziwei_premium_v1':
-        '根据紫微斗数命盘 JSON 生成 9000-13000 字高级专属报告。必须区分结构化命盘信息和 AI 白话解释，不得绝对化命运判断。',
     'ai_report_tieban_basic_v1':
         '根据铁板神数结构化结果生成 1500-2500 字神数简读报告。AI 不得自行推算条文，只解释 JSON 中已有条文，不得宣称精准预测。',
     'ai_report_tieban_deep_v1':
         '根据铁板神数结构化结果生成 4000-6000 字高级推演报告。只解释本地生成的神数条文和命盘 JSON，不自行推算新条文。',
-    'ai_report_tieban_premium_v1':
-        '根据铁板神数结构化结果生成 7000-10000 字专属详批报告。不得编造条文编号、条文内容、应期；必须明确不确定性和免责声明。',
   };
 }

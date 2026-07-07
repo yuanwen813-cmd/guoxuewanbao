@@ -11,6 +11,9 @@ import 'package:guoxueapp/features/ai_reports/ai_report_product_config.dart';
 import 'package:guoxueapp/features/auth/auth_store.dart';
 import 'package:guoxueapp/features/result_common/common_divination_result_page.dart';
 import 'package:guoxueapp/features/v2/mine_home_page.dart';
+import 'package:guoxueapp/features/v2/natal_profile_models.dart';
+import 'package:guoxueapp/features/v2/natal_profile_store.dart';
+import 'package:guoxueapp/features/v2/standalone_destiny_page.dart';
 import 'package:guoxueapp/features/wallet/wallet_page.dart';
 import 'package:guoxueapp/features/wallet/wallet_store.dart';
 import 'package:guoxueapp/domain/history/divination_history.dart';
@@ -68,25 +71,24 @@ void main() {
       'one_yuan',
       'standard_3_9',
       'advanced_6_9',
-      'custom_13_9',
     ]);
     expect(ziwei.map((item) => item.modelId), [
       AiReportModelIds.deepseekV4Flash,
       AiReportModelIds.deepseekV4Pro,
       AiReportModelIds.deepseekV4Pro,
-      AiReportModelIds.deepseekV4Pro,
     ]);
-    expect(ziwei.every((item) => item.enabled), isFalse);
+    expect(ziwei.every((item) => item.enabled), isTrue);
     expect(tieban.map((item) => item.priceTier), [
       'standard_3_9',
       'advanced_6_9',
-      'custom_13_9',
     ]);
     expect(
         tieban.every((item) => item.modelId == AiReportModelIds.deepseekV4Pro),
         isTrue);
-    expect(tieban.every((item) => item.enabled), isFalse);
+    expect(tieban.every((item) => item.enabled), isTrue);
     expect(AiReportProductCatalog.byId('bazi_custom_13_9'), isNull);
+    expect(AiReportProductCatalog.byId('ziwei_premium'), isNull);
+    expect(AiReportProductCatalog.byId('tieban_premium'), isNull);
   });
 
   test('local wallet supports recharge charge and refund', () async {
@@ -323,6 +325,85 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('请先输入想重点了解的事项。'), findsNothing);
+  });
+
+  testWidgets('tieban AI report tiers are enabled after choosing saved profile',
+      (tester) async {
+    final profile = _birthProfile('铁板测试档案');
+    final profileStore = BirthProfileStore()..save(profile);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          birthProfileStoreProvider.overrideWith((ref) => profileStore),
+          walletStoreProvider.overrideWith(
+            (ref) => WalletStore(useServer: false),
+          ),
+        ],
+        child: const MaterialApp(
+          home: StandaloneDestinyPage(type: StandaloneDestinyType.tieban),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('tieban_saved_source')));
+    await tester.pump();
+    await tester.tap(find.text('铁板测试档案'));
+    await tester.pump();
+
+    expect(find.text('铁板神数结果'), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_tieban_basic')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_tieban_deep')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_tieban_premium')), findsNothing);
+    expect(find.textContaining('¥13.9'), findsNothing);
+
+    final basicButton = tester.widget<FilledButton>(
+      find.byKey(const Key('ai_report_tieban_basic')),
+    );
+    final deepButton = tester.widget<FilledButton>(
+      find.byKey(const Key('ai_report_tieban_deep')),
+    );
+    expect(basicButton.onPressed, isNotNull);
+    expect(deepButton.onPressed, isNotNull);
+  });
+
+  testWidgets('ziwei can generate result from saved birth profile',
+      (tester) async {
+    final profile = _birthProfile('紫微测试档案');
+    final profileStore = BirthProfileStore()..save(profile);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          birthProfileStoreProvider.overrideWith((ref) => profileStore),
+          walletStoreProvider.overrideWith(
+            (ref) => WalletStore(useServer: false),
+          ),
+        ],
+        child: const MaterialApp(
+          home: StandaloneDestinyPage(type: StandaloneDestinyType.ziwei),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('ziwei_saved_source')));
+    await tester.pump();
+    await tester.tap(find.text('紫微测试档案'));
+    await tester.pump();
+
+    expect(find.text('紫微斗数命盘'), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_ziwei_brief')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_ziwei_basic')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_ziwei_deep')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_ziwei_premium')), findsNothing);
+    expect(find.textContaining('¥13.9'), findsNothing);
+
+    final briefButton = tester.widget<FilledButton>(
+      find.byKey(const Key('ai_report_ziwei_brief')),
+    );
+    expect(briefButton.onPressed, isNotNull);
   });
 
   testWidgets('question AI report still requires focus', (tester) async {
@@ -682,5 +763,17 @@ CommonDivinationResult _coinResult({
         'movingLines': [1],
       },
     },
+  );
+}
+
+BirthProfile _birthProfile(String displayName) {
+  return BirthProfile.create(
+    displayName: displayName,
+    relationship: BirthRelationship.self,
+    gender: BirthGender.female,
+    gregorianBirthDateTime: DateTime(1990, 6, 12, 8, 30),
+    birthTimeAccuracy: BirthTimeAccuracy.accurate,
+    birthPlaceName: '济南',
+    lunarBirthDateText: '庚午年五月二十',
   );
 }
