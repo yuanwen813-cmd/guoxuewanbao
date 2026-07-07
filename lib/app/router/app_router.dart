@@ -7,6 +7,7 @@ import '../../features/auth/login_page.dart';
 import '../../features/bazi/bazi_page.dart';
 import '../../features/category/category_page.dart';
 import '../../features/v2/ask_home_page.dart';
+import '../../features/v2/apk_download_page.dart';
 import '../../features/v2/classics_home_page.dart';
 import '../../features/v2/coming_soon_page.dart';
 import '../../features/v2/experimental_notice_page.dart';
@@ -140,6 +141,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/wallet',
         name: RouteNames.wallet,
         builder: (context, state) => const WalletPage(),
+      ),
+      GoRoute(
+        path: '/download',
+        name: RouteNames.apkDownload,
+        builder: (context, state) => const ApkDownloadPage(),
       ),
       GoRoute(
         path: '/coming-soon/:featureId',

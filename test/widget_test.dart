@@ -10,6 +10,8 @@ import 'package:guoxueapp/features/ai_reports/ai_report_product_panel.dart';
 import 'package:guoxueapp/features/ai_reports/ai_report_product_config.dart';
 import 'package:guoxueapp/features/auth/auth_store.dart';
 import 'package:guoxueapp/features/result_common/common_divination_result_page.dart';
+import 'package:guoxueapp/features/v2/apk_download_page.dart';
+import 'package:guoxueapp/features/v2/feature_catalog_v2.dart';
 import 'package:guoxueapp/features/v2/mine_home_page.dart';
 import 'package:guoxueapp/features/v2/natal_profile_models.dart';
 import 'package:guoxueapp/features/v2/natal_profile_store.dart';
@@ -406,6 +408,22 @@ void main() {
     expect(briefButton.onPressed, isNotNull);
   });
 
+  testWidgets('apk download page exposes android package link',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ApkDownloadPage(),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('下载 Android App'), findsWidgets);
+    expect(find.byKey(const Key('apk_download_button')), findsOneWidget);
+    expect(find.byKey(const Key('apk_copy_link_button')), findsOneWidget);
+    expect(find.textContaining('/downloads/guoxuewanbao-latest.apk'),
+        findsOneWidget);
+  });
+
   testWidgets('question AI report still requires focus', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -556,6 +574,7 @@ void main() {
       '/main.dart.js',
       '/manifest.json',
       '/reset-cache.html',
+      '/downloads/guoxuewanbao-latest.apk',
     ]) {
       expect(vercel, contains('"source": "$path"'));
     }
@@ -566,6 +585,25 @@ void main() {
     expect(index, contains('manifest.json?v=20260707-cache1'));
     expect(resetCache, contains('正在清理浏览器缓存'));
     expect(resetCache, contains('cache_reset='));
+    expect(vercel, contains('application/vnd.android.package-archive'));
+  });
+
+  test('android apk file is present for web download', () {
+    final apk = File('web/downloads/guoxuewanbao-latest.apk');
+    expect(apk.existsSync(), isTrue);
+    expect(apk.lengthSync(), greaterThan(20 * 1024 * 1024));
+  });
+
+  test('mine feature catalog includes apk download entry', () {
+    expect(
+      FeatureCatalogV2.mineFeatures.any(
+        (entry) =>
+            entry.id == 'apk_download' &&
+            entry.route == '/download' &&
+            entry.title == '下载 Android App',
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('saved AI report is shown without another generate action',
@@ -728,6 +766,7 @@ void main() {
       "path: '/natal/ziwei'",
       "path: '/wallet'",
       "path: '/login'",
+      "path: '/download'",
       "path: '/history'",
       "path: '/legacy-home'",
     ];

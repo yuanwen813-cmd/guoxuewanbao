@@ -18,6 +18,7 @@ class RouteNames {
   static const classics = 'classics';
   static const comingSoon = 'coming_soon';
   static const experimentalNotice = 'experimental_notice';
+  static const apkDownload = 'apk_download';
 
   // AI 推荐
   static const recommend = 'recommend';

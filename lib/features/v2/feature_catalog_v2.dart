@@ -380,6 +380,16 @@ class FeatureCatalogV2 {
       status: FeatureStatusV2.stable,
       actionLabel: '进入',
     ),
+    FeatureEntryV2(
+      id: 'apk_download',
+      title: '下载 Android App',
+      subtitle: '下载安装国学万宝匣 Android 测试版',
+      route: '/download',
+      icon: Icons.android,
+      category: FeatureCategoryV2.mine,
+      status: FeatureStatusV2.stable,
+      actionLabel: '下载',
+    ),
   ];
 
   static const hiddenFeatures = [
