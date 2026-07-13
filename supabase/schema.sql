@@ -126,6 +126,31 @@ create table if not exists ai_call_logs (
   created_at timestamptz not null default now()
 );
 
+create table if not exists admin_users (
+  id uuid primary key default gen_random_uuid(),
+  phone text unique not null,
+  name text,
+  role text not null default 'viewer' check (role in ('super_admin', 'finance', 'support', 'content', 'viewer')),
+  permissions jsonb not null default '[]'::jsonb,
+  status text not null default 'active' check (status in ('active', 'disabled')),
+  last_login_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists admin_audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  admin_user_id uuid references admin_users(id) on delete set null,
+  admin_phone text,
+  action text not null,
+  target_type text,
+  target_id text,
+  detail_json jsonb not null default '{}'::jsonb,
+  client_ip text,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists idx_wallet_transactions_user_time
   on wallet_transactions(user_id, created_at desc);
 
@@ -150,6 +175,15 @@ create index if not exists idx_sms_send_attempts_ip_time
 
 create index if not exists idx_sms_send_attempts_time
   on sms_send_attempts(created_at desc);
+
+create index if not exists idx_admin_users_phone
+  on admin_users(phone);
+
+create index if not exists idx_admin_audit_logs_time
+  on admin_audit_logs(created_at desc);
+
+create index if not exists idx_admin_audit_logs_target
+  on admin_audit_logs(target_type, target_id, created_at desc);
 
 create or replace function touch_updated_at()
 returns trigger
@@ -179,6 +213,11 @@ for each row execute function touch_updated_at();
 drop trigger if exists trg_ai_report_orders_touch_updated_at on ai_report_orders;
 create trigger trg_ai_report_orders_touch_updated_at
 before update on ai_report_orders
+for each row execute function touch_updated_at();
+
+drop trigger if exists trg_admin_users_touch_updated_at on admin_users;
+create trigger trg_admin_users_touch_updated_at
+before update on admin_users
 for each row execute function touch_updated_at();
 
 create or replace function ensure_app_user(
@@ -689,6 +728,194 @@ begin
 end;
 $$;
 
+create or replace function admin_adjust_wallet(
+  p_admin_user_id uuid,
+  p_admin_phone text,
+  p_user_id uuid,
+  p_amount_cents bigint,
+  p_reason text,
+  p_request_id text,
+  p_client_ip text,
+  p_user_agent text
+) returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_user app_users%rowtype;
+  v_wallet wallets%rowtype;
+  v_transaction wallet_transactions%rowtype;
+  v_ref_id text;
+begin
+  if p_user_id is null then
+    raise exception 'USER_ID_REQUIRED';
+  end if;
+
+  if p_amount_cents = 0 then
+    raise exception 'ADJUST_AMOUNT_ZERO';
+  end if;
+
+  if length(trim(coalesce(p_reason, ''))) < 4 then
+    raise exception 'ADJUST_REASON_REQUIRED';
+  end if;
+
+  v_ref_id := 'admin_adjust:' || coalesce(nullif(p_request_id, ''), gen_random_uuid()::text);
+
+  select * into v_transaction
+  from wallet_transactions
+  where ref_type = 'admin_adjust'
+    and ref_id = v_ref_id
+    and type = 'manual_adjust'
+  limit 1;
+
+  if found then
+    select * into v_wallet
+    from wallets
+    where id = v_transaction.wallet_id;
+
+    return jsonb_build_object(
+      'wallet', to_jsonb(v_wallet),
+      'transaction', to_jsonb(v_transaction),
+      'already_applied', true
+    );
+  end if;
+
+  select * into v_user
+  from app_users
+  where id = p_user_id
+  for update;
+
+  if not found then
+    raise exception 'USER_NOT_FOUND';
+  end if;
+
+  select * into v_wallet
+  from wallets
+  where user_id = p_user_id
+  for update;
+
+  if not found then
+    raise exception 'WALLET_NOT_FOUND';
+  end if;
+
+  if v_wallet.balance_cents + p_amount_cents < 0 then
+    raise exception 'WALLET_BALANCE_NOT_ENOUGH';
+  end if;
+
+  update wallets
+  set balance_cents = balance_cents + p_amount_cents,
+      updated_at = now()
+  where id = v_wallet.id
+  returning * into v_wallet;
+
+  insert into wallet_transactions(
+    user_id,
+    wallet_id,
+    type,
+    amount_cents,
+    balance_after_cents,
+    currency,
+    ref_type,
+    ref_id,
+    note
+  )
+  values (
+    p_user_id,
+    v_wallet.id,
+    'manual_adjust',
+    p_amount_cents,
+    v_wallet.balance_cents,
+    v_wallet.currency,
+    'admin_adjust',
+    v_ref_id,
+    p_reason
+  )
+  returning * into v_transaction;
+
+  insert into admin_audit_logs(
+    admin_user_id,
+    admin_phone,
+    action,
+    target_type,
+    target_id,
+    detail_json,
+    client_ip,
+    user_agent
+  )
+  values (
+    p_admin_user_id,
+    p_admin_phone,
+    'wallet.adjust',
+    'app_user',
+    p_user_id::text,
+    jsonb_build_object(
+      'amount_cents', p_amount_cents,
+      'reason', p_reason,
+      'wallet_transaction_id', v_transaction.id,
+      'balance_after_cents', v_wallet.balance_cents,
+      'request_id', p_request_id
+    ),
+    p_client_ip,
+    p_user_agent
+  );
+
+  return jsonb_build_object(
+    'wallet', to_jsonb(v_wallet),
+    'transaction', to_jsonb(v_transaction),
+    'already_applied', false
+  );
+end;
+$$;
+
+create or replace function admin_dashboard_summary()
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_users bigint;
+  v_wallet_balance bigint;
+  v_paid_recharge_orders bigint;
+  v_paid_recharge_cents bigint;
+  v_pending_recharge_orders bigint;
+  v_completed_ai_reports bigint;
+  v_ai_revenue_cents bigint;
+  v_failed_or_refunded_ai_reports bigint;
+begin
+  select count(*) into v_users from app_users;
+  select coalesce(sum(balance_cents), 0) into v_wallet_balance from wallets;
+
+  select count(*), coalesce(sum(amount_cents), 0)
+    into v_paid_recharge_orders, v_paid_recharge_cents
+  from recharge_orders
+  where status = 'paid';
+
+  select count(*) into v_pending_recharge_orders
+  from recharge_orders
+  where status = 'pending';
+
+  select count(*), coalesce(sum(price_cents), 0)
+    into v_completed_ai_reports, v_ai_revenue_cents
+  from ai_report_orders
+  where status = 'completed';
+
+  select count(*) into v_failed_or_refunded_ai_reports
+  from ai_report_orders
+  where status in ('failed', 'refunded');
+
+  return jsonb_build_object(
+    'users', v_users,
+    'totalWalletBalanceCents', v_wallet_balance,
+    'paidRechargeOrders', v_paid_recharge_orders,
+    'paidRechargeCents', v_paid_recharge_cents,
+    'pendingRechargeOrders', v_pending_recharge_orders,
+    'completedAiReports', v_completed_ai_reports,
+    'aiRevenueCents', v_ai_revenue_cents,
+    'failedOrRefundedAiReports', v_failed_or_refunded_ai_reports
+  );
+end;
+$$;
+
 -- Security hardening for the public testing deployment.
 -- All business data must be accessed through Vercel API routes that use the
 -- Supabase service role key. Frontend anon/authenticated roles must not read
@@ -702,6 +929,8 @@ alter table recharge_orders enable row level security;
 alter table ai_report_orders enable row level security;
 alter table payment_notify_logs enable row level security;
 alter table ai_call_logs enable row level security;
+alter table admin_users enable row level security;
+alter table admin_audit_logs enable row level security;
 
 revoke all on table app_users from public, anon, authenticated;
 revoke all on table wallets from public, anon, authenticated;
@@ -712,6 +941,8 @@ revoke all on table recharge_orders from public, anon, authenticated;
 revoke all on table ai_report_orders from public, anon, authenticated;
 revoke all on table payment_notify_logs from public, anon, authenticated;
 revoke all on table ai_call_logs from public, anon, authenticated;
+revoke all on table admin_users from public, anon, authenticated;
+revoke all on table admin_audit_logs from public, anon, authenticated;
 
 revoke execute on function ensure_app_user(uuid, text) from public, anon, authenticated;
 revoke execute on function grant_registration_bonus(uuid) from public, anon, authenticated;
@@ -720,6 +951,8 @@ revoke execute on function mark_recharge_paid(text, text, bigint, uuid, jsonb) f
 revoke execute on function create_ai_report_debit(uuid, text, text, bigint, jsonb, jsonb, jsonb, text) from public, anon, authenticated;
 revoke execute on function complete_ai_report_order(uuid, text, text, integer, integer) from public, anon, authenticated;
 revoke execute on function refund_ai_report_order(uuid, text, text) from public, anon, authenticated;
+revoke execute on function admin_adjust_wallet(uuid, text, uuid, bigint, text, text, text, text) from public, anon, authenticated;
+revoke execute on function admin_dashboard_summary() from public, anon, authenticated;
 
 grant usage on schema public to service_role;
 grant all on table app_users to service_role;
@@ -731,6 +964,8 @@ grant all on table recharge_orders to service_role;
 grant all on table ai_report_orders to service_role;
 grant all on table payment_notify_logs to service_role;
 grant all on table ai_call_logs to service_role;
+grant all on table admin_users to service_role;
+grant all on table admin_audit_logs to service_role;
 
 grant execute on function ensure_app_user(uuid, text) to service_role;
 grant execute on function grant_registration_bonus(uuid) to service_role;
@@ -739,3 +974,5 @@ grant execute on function mark_recharge_paid(text, text, bigint, uuid, jsonb) to
 grant execute on function create_ai_report_debit(uuid, text, text, bigint, jsonb, jsonb, jsonb, text) to service_role;
 grant execute on function complete_ai_report_order(uuid, text, text, integer, integer) to service_role;
 grant execute on function refund_ai_report_order(uuid, text, text) to service_role;
+grant execute on function admin_adjust_wallet(uuid, text, uuid, bigint, text, text, text, text) to service_role;
+grant execute on function admin_dashboard_summary() to service_role;

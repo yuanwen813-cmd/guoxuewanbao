@@ -1,4 +1,18 @@
 const { generateAiReport, getAiReportDetail } = require('../server/aiReportService');
+const {
+  adjustWallet,
+  getAdminDashboard,
+  getAiReportDetailForAdmin,
+  getUserDetail,
+  listAiReportOrders,
+  listAuditLogs,
+  listRechargeOrders,
+  listUsers,
+  listWalletTransactions: listAdminWalletTransactions,
+  requireAdmin,
+  sendAdminCode,
+  verifyAdminCode,
+} = require('../server/adminService');
 const { getAlipayRuntimeStatus } = require('../server/alipay');
 const {
   getAuthRuntimeStatus,
@@ -264,6 +278,127 @@ const routes = {
       ok: true,
       report,
     });
+  }),
+
+  'admin-auth-send-code': handleApi(['POST'], async (req, res) => {
+    const body = await readJson(req);
+    await sendAdminCode(body.phone, { req });
+    sendJson(res, 200, { ok: true });
+  }),
+
+  'admin-auth-verify-code': handleApi(['POST'], async (req, res) => {
+    const body = await readJson(req);
+    const result = await verifyAdminCode(body.phone, body.code, { req });
+    sendJson(res, 200, {
+      ok: true,
+      token: result.token,
+      admin: result.admin,
+    });
+  }),
+
+  'admin-me': handleApi(['GET'], async (req, res) => {
+    const admin = await requireAdmin(req, 'admin:read');
+    sendJson(res, 200, { ok: true, admin });
+  }),
+
+  'admin-dashboard': handleApi(['GET'], async (req, res) => {
+    await requireAdmin(req, 'admin:read');
+    const dashboard = await getAdminDashboard();
+    sendJson(res, 200, { ok: true, dashboard });
+  }),
+
+  'admin-users': handleApi(['GET'], async (req, res) => {
+    await requireAdmin(req, 'admin:read');
+    const url = parseUrl(req);
+    const result = await listUsers({
+      q: url.searchParams.get('q'),
+      status: url.searchParams.get('status'),
+      page: url.searchParams.get('page'),
+      pageSize: url.searchParams.get('pageSize'),
+    });
+    sendJson(res, 200, { ok: true, ...result });
+  }),
+
+  'admin-user-detail': handleApi(['GET'], async (req, res) => {
+    await requireAdmin(req, 'admin:read');
+    const url = parseUrl(req);
+    const result = await getUserDetail({
+      userId: url.searchParams.get('userId'),
+      phone: url.searchParams.get('phone'),
+    });
+    sendJson(res, 200, { ok: true, ...result });
+  }),
+
+  'admin-wallet-transactions': handleApi(['GET'], async (req, res) => {
+    await requireAdmin(req, 'admin:read');
+    const url = parseUrl(req);
+    const result = await listAdminWalletTransactions({
+      userId: url.searchParams.get('userId'),
+      page: url.searchParams.get('page'),
+      pageSize: url.searchParams.get('pageSize'),
+    });
+    sendJson(res, 200, { ok: true, ...result });
+  }),
+
+  'admin-recharge-orders': handleApi(['GET'], async (req, res) => {
+    await requireAdmin(req, 'admin:read');
+    const url = parseUrl(req);
+    const result = await listRechargeOrders({
+      userId: url.searchParams.get('userId'),
+      status: url.searchParams.get('status'),
+      provider: url.searchParams.get('provider'),
+      outTradeNo: url.searchParams.get('outTradeNo'),
+      page: url.searchParams.get('page'),
+      pageSize: url.searchParams.get('pageSize'),
+    });
+    sendJson(res, 200, { ok: true, ...result });
+  }),
+
+  'admin-ai-report-orders': handleApi(['GET'], async (req, res) => {
+    await requireAdmin(req, 'admin:read');
+    const url = parseUrl(req);
+    const result = await listAiReportOrders({
+      userId: url.searchParams.get('userId'),
+      status: url.searchParams.get('status'),
+      productId: url.searchParams.get('productId'),
+      page: url.searchParams.get('page'),
+      pageSize: url.searchParams.get('pageSize'),
+    });
+    sendJson(res, 200, { ok: true, ...result });
+  }),
+
+  'admin-ai-report-detail': handleApi(['GET'], async (req, res) => {
+    await requireAdmin(req, 'admin:read');
+    const url = parseUrl(req);
+    const report = await getAiReportDetailForAdmin({
+      orderId: url.searchParams.get('orderId'),
+    });
+    sendJson(res, 200, { ok: true, report });
+  }),
+
+  'admin-wallet-adjust': handleApi(['POST'], async (req, res) => {
+    const admin = await requireAdmin(req, 'wallet:adjust');
+    const body = await readJson(req);
+    const result = await adjustWallet({
+      admin,
+      userId: body.userId,
+      amountCents: body.amountCents,
+      reason: body.reason,
+      req,
+    });
+    sendJson(res, 200, { ok: true, ...result });
+  }),
+
+  'admin-audit-logs': handleApi(['GET'], async (req, res) => {
+    await requireAdmin(req, 'audit:read');
+    const url = parseUrl(req);
+    const result = await listAuditLogs({
+      action: url.searchParams.get('action'),
+      targetType: url.searchParams.get('targetType'),
+      page: url.searchParams.get('page'),
+      pageSize: url.searchParams.get('pageSize'),
+    });
+    sendJson(res, 200, { ok: true, ...result });
   }),
 };
 
