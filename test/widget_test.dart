@@ -767,6 +767,7 @@ void main() {
       "path: '/wallet'",
       "path: '/login'",
       "path: '/download'",
+      "path: '/admin'",
       "path: '/history'",
       "path: '/legacy-home'",
     ];

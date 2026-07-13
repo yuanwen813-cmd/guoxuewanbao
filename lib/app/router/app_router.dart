@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/almanac/almanac_page.dart';
+import '../../features/admin/admin_page.dart';
 import '../../features/auth/login_page.dart';
 import '../../features/bazi/bazi_page.dart';
 import '../../features/category/category_page.dart';
@@ -146,6 +147,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/download',
         name: RouteNames.apkDownload,
         builder: (context, state) => const ApkDownloadPage(),
+      ),
+      GoRoute(
+        path: '/admin',
+        name: RouteNames.admin,
+        builder: (context, state) => const AdminPage(),
       ),
       GoRoute(
         path: '/coming-soon/:featureId',
