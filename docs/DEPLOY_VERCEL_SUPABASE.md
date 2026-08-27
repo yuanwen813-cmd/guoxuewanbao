@@ -200,3 +200,14 @@ ALIPAY_RETURN_URL=
 - 报告复看不重复扣费。
 - 页面不出现会员等级、VIP、积分、权益文案。
 - Web / App / 小程序均调用同一套 API。
+
+## 13. 用户数据同步与个人数据管理
+
+重新执行最新版 `supabase/schema.sql` 后，登录用户的历史记录和命盘档案会采用本机优先、云端同步策略。新增表、API、注销保护和人工测试步骤见 `docs/USER_DATA_AND_GROWTH_CAPABILITIES.md`。
+
+部署顺序：
+
+1. 在 Supabase SQL Editor 执行最新版 `supabase/schema.sql`。
+2. 确认四张新增表和 `delete_account_data` 函数存在。
+3. 部署 Vercel。
+4. 使用两个账号验证记录隔离和跨设备恢复。

@@ -8,6 +8,7 @@ import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_typography.dart';
 import '../../domain/common/common_result_models.dart';
 import '../auth/auth_store.dart';
+import '../account/user_data_api.dart';
 import '../wallet/server_wallet_api.dart';
 import '../wallet/wallet_store.dart';
 import 'ai_report_product_config.dart';
@@ -39,6 +40,8 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   final _focusController = TextEditingController();
   final Map<String, String> _answers = {};
   final Map<String, String> _errors = {};
+  final Map<String, String> _reportIds = {};
+  final Map<String, String> _feedback = {};
   String? _loadingProductId;
 
   @override
@@ -78,6 +81,9 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
       final text = report.text.trim();
       if (report.productId.isNotEmpty && text.isNotEmpty) {
         _answers.putIfAbsent(report.productId, () => text);
+        if (report.reportId?.trim().isNotEmpty == true) {
+          _reportIds.putIfAbsent(report.productId, () => report.reportId!);
+        }
       }
     }
   }
@@ -181,7 +187,10 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
                 loading: _loadingProductId == config.id,
                 answer: _answers[config.id],
                 error: _errors[config.id],
+                reportId: _reportIds[config.id],
+                feedback: _feedback[config.id],
                 onGenerate: () => _generateReport(config),
+                onFeedback: (rating) => _submitFeedback(config.id, rating),
               ),
             ),
           const SizedBox(height: 2),
@@ -243,6 +252,9 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
       setState(() {
         _answers[config.id] =
             result.answer.trim().isEmpty ? 'AI 服务未返回内容。' : result.answer.trim();
+        if (result.reportId?.trim().isNotEmpty == true) {
+          _reportIds[config.id] = result.reportId!;
+        }
       });
       widget.onReportGenerated?.call(
         AiReportSnapshot(
@@ -275,6 +287,31 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
       setState(() => _errors[config.id] = 'AI 报告生成失败，请稍后再试。');
     } finally {
       if (mounted) setState(() => _loadingProductId = null);
+    }
+  }
+
+  Future<void> _submitFeedback(String productId, String rating) async {
+    final auth = ref.read(authStoreProvider);
+    final reportId = _reportIds[productId];
+    if (!auth.isAuthenticated || auth.token == null || reportId == null) return;
+    setState(() => _feedback[productId] = 'submitting');
+    try {
+      await UserDataApi().submitAiFeedback(
+        auth.token!,
+        reportId: reportId,
+        rating: rating,
+      );
+      if (!mounted) return;
+      setState(() => _feedback[productId] = rating);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('感谢反馈，我们会据此优化解析质量')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _feedback.remove(productId));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userDataApiMessage(error, '反馈提交失败'))),
+      );
     }
   }
 
@@ -325,14 +362,20 @@ class _AiReportProductTile extends StatelessWidget {
   final bool loading;
   final String? answer;
   final String? error;
+  final String? reportId;
+  final String? feedback;
   final VoidCallback onGenerate;
+  final ValueChanged<String> onFeedback;
 
   const _AiReportProductTile({
     required this.config,
     required this.loading,
     required this.answer,
     required this.error,
+    required this.reportId,
+    required this.feedback,
     required this.onGenerate,
+    required this.onFeedback,
   });
 
   @override
@@ -465,6 +508,45 @@ class _AiReportProductTile extends StatelessWidget {
                 ),
               ],
             ),
+            if (reportId?.isNotEmpty == true) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(
+                    '这份 AI 解析对你有帮助吗？',
+                    style: GuoXueTypography.caption.copyWith(
+                      color: GuoXueColors.inkGray,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    key: Key('ai_report_helpful_${config.id}'),
+                    tooltip: '有帮助',
+                    onPressed: feedback == 'submitting'
+                        ? null
+                        : () => onFeedback('helpful'),
+                    icon: Icon(
+                      feedback == 'helpful'
+                          ? Icons.thumb_up
+                          : Icons.thumb_up_outlined,
+                    ),
+                  ),
+                  IconButton(
+                    key: Key('ai_report_not_helpful_${config.id}'),
+                    tooltip: '没帮助',
+                    onPressed: feedback == 'submitting'
+                        ? null
+                        : () => onFeedback('not_helpful'),
+                    icon: Icon(
+                      feedback == 'not_helpful'
+                          ? Icons.thumb_down
+                          : Icons.thumb_down_outlined,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ],
       ),
@@ -477,7 +559,8 @@ class _AiReportProductTile extends StatelessWidget {
       '',
       text.trim(),
       '',
-      '以上内容仅供传统文化参考。'
+      'AI 生成内容，仅供传统文化学习与娱乐参考。',
+      'https://guoxuewanbao.cn/?ref=ai_share&utm_source=user_share&utm_medium=share&utm_campaign=${Uri.encodeComponent(config.featureKey)}',
     ].join('\n');
   }
 }

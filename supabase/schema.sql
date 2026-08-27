@@ -151,6 +151,56 @@ create table if not exists admin_audit_logs (
   created_at timestamptz not null default now()
 );
 
+create table if not exists user_history_records (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references app_users(id) on delete cascade,
+  client_record_id text not null,
+  payload_json jsonb not null,
+  client_updated_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, client_record_id)
+);
+
+create table if not exists birth_profiles (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references app_users(id) on delete cascade,
+  client_profile_id text not null,
+  payload_json jsonb not null,
+  client_updated_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, client_profile_id)
+);
+
+create table if not exists ai_report_feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references app_users(id) on delete cascade,
+  ai_report_order_id uuid not null references ai_report_orders(id) on delete cascade,
+  rating text not null check (rating in ('helpful', 'not_helpful')),
+  reason text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(user_id, ai_report_order_id)
+);
+
+create table if not exists user_attributions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid unique not null references app_users(id) on delete cascade,
+  first_source text,
+  first_medium text,
+  first_campaign text,
+  first_referrer text,
+  latest_source text,
+  latest_medium text,
+  latest_campaign text,
+  latest_referrer text,
+  first_seen_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists idx_wallet_transactions_user_time
   on wallet_transactions(user_id, created_at desc);
 
@@ -185,6 +235,18 @@ create index if not exists idx_admin_audit_logs_time
 create index if not exists idx_admin_audit_logs_target
   on admin_audit_logs(target_type, target_id, created_at desc);
 
+create index if not exists idx_user_history_records_user_time
+  on user_history_records(user_id, client_updated_at desc);
+
+create index if not exists idx_birth_profiles_user_time
+  on birth_profiles(user_id, client_updated_at desc);
+
+create index if not exists idx_ai_report_feedback_time
+  on ai_report_feedback(created_at desc);
+
+create index if not exists idx_user_attributions_source
+  on user_attributions(latest_source, last_seen_at desc);
+
 create or replace function touch_updated_at()
 returns trigger
 language plpgsql
@@ -218,6 +280,26 @@ for each row execute function touch_updated_at();
 drop trigger if exists trg_admin_users_touch_updated_at on admin_users;
 create trigger trg_admin_users_touch_updated_at
 before update on admin_users
+for each row execute function touch_updated_at();
+
+drop trigger if exists trg_user_history_records_touch_updated_at on user_history_records;
+create trigger trg_user_history_records_touch_updated_at
+before update on user_history_records
+for each row execute function touch_updated_at();
+
+drop trigger if exists trg_birth_profiles_touch_updated_at on birth_profiles;
+create trigger trg_birth_profiles_touch_updated_at
+before update on birth_profiles
+for each row execute function touch_updated_at();
+
+drop trigger if exists trg_ai_report_feedback_touch_updated_at on ai_report_feedback;
+create trigger trg_ai_report_feedback_touch_updated_at
+before update on ai_report_feedback
+for each row execute function touch_updated_at();
+
+drop trigger if exists trg_user_attributions_touch_updated_at on user_attributions;
+create trigger trg_user_attributions_touch_updated_at
+before update on user_attributions
 for each row execute function touch_updated_at();
 
 create or replace function ensure_app_user(
@@ -867,6 +949,68 @@ begin
 end;
 $$;
 
+create or replace function delete_account_data(
+  p_user_id uuid
+) returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  v_wallet wallets%rowtype;
+  v_pending_orders bigint;
+begin
+  select * into v_wallet
+  from wallets
+  where user_id = p_user_id
+  for update;
+
+  if not found then
+    raise exception 'WALLET_NOT_FOUND';
+  end if;
+  if v_wallet.balance_cents <> 0 then
+    raise exception 'WALLET_BALANCE_NOT_ZERO';
+  end if;
+
+  select count(*) into v_pending_orders
+  from recharge_orders
+  where user_id = p_user_id and status = 'pending';
+  if v_pending_orders > 0 then
+    raise exception 'PENDING_RECHARGE_EXISTS';
+  end if;
+
+  delete from user_history_records where user_id = p_user_id;
+  delete from birth_profiles where user_id = p_user_id;
+  delete from ai_report_feedback where user_id = p_user_id;
+  delete from user_attributions where user_id = p_user_id;
+
+  update ai_report_orders
+  set input_snapshot_json = null,
+      bazi_chart_json = null,
+      question_result_json = null,
+      prompt_snapshot = null,
+      result_text = null,
+      error_message = case
+        when status in ('failed', 'refunded') then error_message
+        else null
+      end,
+      updated_at = now()
+  where user_id = p_user_id;
+
+  update app_users
+  set phone = null,
+      nickname = null,
+      avatar_url = null,
+      status = 'disabled',
+      updated_at = now()
+  where id = p_user_id;
+
+  return jsonb_build_object(
+    'deleted', true,
+    'financialRecordsRetained', true
+  );
+end;
+$$;
+
 create or replace function admin_dashboard_summary()
 returns jsonb
 language plpgsql
@@ -881,6 +1025,14 @@ declare
   v_completed_ai_reports bigint;
   v_ai_revenue_cents bigint;
   v_failed_or_refunded_ai_reports bigint;
+  v_history_records bigint;
+  v_birth_profiles bigint;
+  v_helpful_feedback bigint;
+  v_not_helpful_feedback bigint;
+  v_attributed_users bigint;
+  v_recharged_users bigint;
+  v_ai_paying_users bigint;
+  v_top_sources jsonb;
 begin
   select count(*) into v_users from app_users;
   select coalesce(sum(balance_cents), 0) into v_wallet_balance from wallets;
@@ -903,6 +1055,30 @@ begin
   from ai_report_orders
   where status in ('failed', 'refunded');
 
+  select count(*) into v_history_records from user_history_records;
+  select count(*) into v_birth_profiles from birth_profiles;
+  select count(*) into v_helpful_feedback
+  from ai_report_feedback where rating = 'helpful';
+  select count(*) into v_not_helpful_feedback
+  from ai_report_feedback where rating = 'not_helpful';
+  select count(*) into v_attributed_users from user_attributions;
+  select count(distinct user_id) into v_recharged_users
+  from recharge_orders where status = 'paid';
+  select count(distinct user_id) into v_ai_paying_users
+  from ai_report_orders where status = 'completed';
+  select coalesce(jsonb_agg(source_row order by source_row->>'count' desc), '[]'::jsonb)
+    into v_top_sources
+  from (
+    select jsonb_build_object(
+      'source', coalesce(nullif(latest_source, ''), 'direct'),
+      'count', count(*)
+    ) as source_row
+    from user_attributions
+    group by coalesce(nullif(latest_source, ''), 'direct')
+    order by count(*) desc
+    limit 8
+  ) ranked_sources;
+
   return jsonb_build_object(
     'users', v_users,
     'totalWalletBalanceCents', v_wallet_balance,
@@ -911,7 +1087,15 @@ begin
     'pendingRechargeOrders', v_pending_recharge_orders,
     'completedAiReports', v_completed_ai_reports,
     'aiRevenueCents', v_ai_revenue_cents,
-    'failedOrRefundedAiReports', v_failed_or_refunded_ai_reports
+    'failedOrRefundedAiReports', v_failed_or_refunded_ai_reports,
+    'historyRecords', v_history_records,
+    'birthProfiles', v_birth_profiles,
+    'helpfulFeedback', v_helpful_feedback,
+    'notHelpfulFeedback', v_not_helpful_feedback,
+    'attributedUsers', v_attributed_users,
+    'rechargedUsers', v_recharged_users,
+    'aiPayingUsers', v_ai_paying_users,
+    'topSources', v_top_sources
   );
 end;
 $$;
@@ -931,6 +1115,10 @@ alter table payment_notify_logs enable row level security;
 alter table ai_call_logs enable row level security;
 alter table admin_users enable row level security;
 alter table admin_audit_logs enable row level security;
+alter table user_history_records enable row level security;
+alter table birth_profiles enable row level security;
+alter table ai_report_feedback enable row level security;
+alter table user_attributions enable row level security;
 
 revoke all on table app_users from public, anon, authenticated;
 revoke all on table wallets from public, anon, authenticated;
@@ -943,6 +1131,10 @@ revoke all on table payment_notify_logs from public, anon, authenticated;
 revoke all on table ai_call_logs from public, anon, authenticated;
 revoke all on table admin_users from public, anon, authenticated;
 revoke all on table admin_audit_logs from public, anon, authenticated;
+revoke all on table user_history_records from public, anon, authenticated;
+revoke all on table birth_profiles from public, anon, authenticated;
+revoke all on table ai_report_feedback from public, anon, authenticated;
+revoke all on table user_attributions from public, anon, authenticated;
 
 revoke execute on function ensure_app_user(uuid, text) from public, anon, authenticated;
 revoke execute on function grant_registration_bonus(uuid) from public, anon, authenticated;
@@ -953,6 +1145,7 @@ revoke execute on function complete_ai_report_order(uuid, text, text, integer, i
 revoke execute on function refund_ai_report_order(uuid, text, text) from public, anon, authenticated;
 revoke execute on function admin_adjust_wallet(uuid, text, uuid, bigint, text, text, text, text) from public, anon, authenticated;
 revoke execute on function admin_dashboard_summary() from public, anon, authenticated;
+revoke execute on function delete_account_data(uuid) from public, anon, authenticated;
 
 grant usage on schema public to service_role;
 grant all on table app_users to service_role;
@@ -966,6 +1159,10 @@ grant all on table payment_notify_logs to service_role;
 grant all on table ai_call_logs to service_role;
 grant all on table admin_users to service_role;
 grant all on table admin_audit_logs to service_role;
+grant all on table user_history_records to service_role;
+grant all on table birth_profiles to service_role;
+grant all on table ai_report_feedback to service_role;
+grant all on table user_attributions to service_role;
 
 grant execute on function ensure_app_user(uuid, text) to service_role;
 grant execute on function grant_registration_bonus(uuid) to service_role;
@@ -976,3 +1173,4 @@ grant execute on function complete_ai_report_order(uuid, text, text, integer, in
 grant execute on function refund_ai_report_order(uuid, text, text) to service_role;
 grant execute on function admin_adjust_wallet(uuid, text, uuid, bigint, text, text, text, text) to service_role;
 grant execute on function admin_dashboard_summary() to service_role;
+grant execute on function delete_account_data(uuid) to service_role;

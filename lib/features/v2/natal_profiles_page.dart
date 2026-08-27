@@ -14,12 +14,25 @@ class NatalProfilesPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profiles = ref.watch(birthProfileStoreProvider);
+    final store = ref.read(birthProfileStoreProvider.notifier);
     return V2PageScaffold(
       title: '命盘档案',
       subtitle: '查看和管理已保存的出生资料档案。档案可用于自己、家人、朋友或客户。',
       icon: Icons.badge_outlined,
       showAppBar: true,
       children: [
+        if (store.hasLegacyProfiles) ...[
+          _LegacyProfilesNotice(
+            count: store.legacyProfileCount,
+            onImport: () {
+              store.importLegacyProfiles();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('本机旧档案已导入当前账号并开始同步')),
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+        ],
         if (profiles.isEmpty)
           const _EmptyProfiles()
         else
@@ -29,6 +42,37 @@ class NatalProfilesPage extends ConsumerWidget {
               child: _ProfileCard(profile: profile),
             ),
       ],
+    );
+  }
+}
+
+class _LegacyProfilesNotice extends StatelessWidget {
+  const _LegacyProfilesNotice({
+    required this.count,
+    required this.onImport,
+  });
+
+  final int count;
+  final VoidCallback onImport;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: GuoXueColors.gold.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: GuoXueColors.gold.withOpacity(0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.move_to_inbox_outlined, color: GuoXueColors.primary),
+          const SizedBox(width: 10),
+          Expanded(child: Text('发现 $count 份本机旧档案，可由你确认后导入当前账号。')),
+          const SizedBox(width: 10),
+          FilledButton(onPressed: onImport, child: const Text('导入')),
+        ],
+      ),
     );
   }
 }

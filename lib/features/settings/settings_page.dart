@@ -18,6 +18,13 @@ class SettingsPage extends StatelessWidget {
             child: Column(
               children: [
                 _SettingsItem(
+                  icon: Icons.cloud_sync_outlined,
+                  title: '我的数据',
+                  subtitle: '查看云同步说明，导出数据或注销账号',
+                  onTap: () => context.push('/settings/account-data'),
+                ),
+                const Divider(),
+                _SettingsItem(
                   icon: Icons.privacy_tip_outlined,
                   title: '隐私声明',
                   subtitle: '了解我们如何保护你的资料和记录',

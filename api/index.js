@@ -39,6 +39,14 @@ const {
   getWallet,
   listWalletTransactions,
 } = require('../server/walletService');
+const {
+  deleteAccountData,
+  exportAccountData,
+  getUserData,
+  recordAttribution,
+  saveAiReportFeedback,
+  syncUserData,
+} = require('../server/userDataService');
 
 function requestPath(req) {
   const url = parseUrl(req);
@@ -96,6 +104,77 @@ const routes = {
       ok: true,
       user: current.appUser,
     });
+  }),
+
+  'user-data': handleApi(['GET', 'POST'], async (req, res) => {
+    const current = await requireUser(req);
+    if (req.method === 'POST') {
+      assertRequestRateLimit(req, {
+        name: `user-data:${current.appUser.id}`,
+        max: 120,
+        windowMs: 60 * 60 * 1000,
+      });
+    }
+    const data = req.method === 'GET'
+      ? await getUserData(current.appUser.id)
+      : await syncUserData(
+          current.appUser.id,
+          await readJson(req, { maxBytes: 512 * 1024 }),
+        );
+    sendJson(res, 200, { ok: true, data });
+  }),
+
+  'account-export': handleApi(['GET'], async (req, res) => {
+    const current = await requireUser(req);
+    assertRequestRateLimit(req, {
+      name: `account-export:${current.appUser.id}`,
+      max: 10,
+      windowMs: 60 * 60 * 1000,
+    });
+    const data = await exportAccountData(current.appUser.id);
+    sendJson(res, 200, { ok: true, data });
+  }),
+
+  'account-delete': handleApi(['POST'], async (req, res) => {
+    const current = await requireUser(req);
+    assertRequestRateLimit(req, {
+      name: `account-delete:${current.appUser.id}`,
+      max: 5,
+      windowMs: 60 * 60 * 1000,
+    });
+    const result = await deleteAccountData(
+      current.appUser.id,
+      await readJson(req),
+    );
+    sendJson(res, 200, { ok: true, result });
+  }),
+
+  'ai-report-feedback': handleApi(['POST'], async (req, res) => {
+    const current = await requireUser(req);
+    assertRequestRateLimit(req, {
+      name: `ai-report-feedback:${current.appUser.id}`,
+      max: 60,
+      windowMs: 60 * 60 * 1000,
+    });
+    const feedback = await saveAiReportFeedback(
+      current.appUser.id,
+      await readJson(req),
+    );
+    sendJson(res, 200, { ok: true, feedback });
+  }),
+
+  'attribution-record': handleApi(['POST'], async (req, res) => {
+    const current = await requireUser(req);
+    assertRequestRateLimit(req, {
+      name: `attribution-record:${current.appUser.id}`,
+      max: 12,
+      windowMs: 60 * 60 * 1000,
+    });
+    const attribution = await recordAttribution(
+      current.appUser.id,
+      await readJson(req),
+    );
+    sendJson(res, 200, { ok: true, attribution });
   }),
 
   wallet: handleApi(['GET'], async (req, res) => {

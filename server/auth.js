@@ -378,6 +378,9 @@ async function verifyPhoneCode(phone, code) {
       phone: normalized,
     };
     const business = await ensureBusinessUser(authUser);
+    if (business.user.status !== 'active') {
+      throw new HttpError(403, '账户已停用或已注销');
+    }
     return {
       token: createAppAuthToken(normalized),
       user: business.user,
@@ -425,6 +428,9 @@ async function verifyPhoneCode(phone, code) {
     phone: normalized,
   };
   const business = await ensureBusinessUser(authUser);
+  if (business.user.status !== 'active') {
+    throw new HttpError(403, '账户已停用或已注销');
+  }
   return {
     token: createAppAuthToken(normalized),
     user: business.user,
@@ -482,6 +488,9 @@ async function requireUser(req) {
   const token = getBearerToken(req);
   const authUser = await getAuthUserFromToken(token);
   const business = await ensureBusinessUser(authUser);
+  if (business.user.status !== 'active') {
+    throw new HttpError(403, '账户已停用或已注销');
+  }
   return {
     token,
     authUser,

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/almanac/almanac_page.dart';
 import '../../features/admin/admin_page.dart';
+import '../../features/account/account_data_page.dart';
 import '../../features/auth/login_page.dart';
 import '../../features/bazi/bazi_page.dart';
 import '../../features/category/category_page.dart';
@@ -142,6 +143,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/wallet',
         name: RouteNames.wallet,
         builder: (context, state) => const WalletPage(),
+      ),
+      GoRoute(
+        path: '/settings/account-data',
+        name: RouteNames.accountData,
+        builder: (context, state) => const AccountDataPage(),
       ),
       GoRoute(
         path: '/download',

@@ -265,6 +265,7 @@ class _AdminPageState extends State<AdminPage> {
 
   Widget _buildDashboard() {
     final data = _dashboard ?? const <String, dynamic>{};
+    final sources = data['topSources'] as List<dynamic>? ?? const [];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -298,8 +299,59 @@ class _AdminPageState extends State<AdminPage> {
               label: 'AI 收入',
               value: _formatCents(data['aiRevenueCents']),
             ),
+            _MetricCard(
+              label: '云端历史记录',
+              value: '${data['historyRecords'] ?? 0}',
+            ),
+            _MetricCard(
+              label: '云端命盘档案',
+              value: '${data['birthProfiles'] ?? 0}',
+            ),
+            _MetricCard(
+              label: 'AI 有帮助',
+              value: '${data['helpfulFeedback'] ?? 0}',
+            ),
+            _MetricCard(
+              label: 'AI 没帮助',
+              value: '${data['notHelpfulFeedback'] ?? 0}',
+            ),
+            _MetricCard(
+              label: '已记录来源用户',
+              value: '${data['attributedUsers'] ?? 0}',
+            ),
+            _MetricCard(
+              label: '充值用户',
+              value: '${data['rechargedUsers'] ?? 0}',
+            ),
+            _MetricCard(
+              label: 'AI 付费用户',
+              value: '${data['aiPayingUsers'] ?? 0}',
+            ),
           ],
         ),
+        if (sources.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _Panel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '用户来源',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 10),
+                for (final raw in sources)
+                  if (raw is Map)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        '${raw['source'] ?? 'direct'}：${raw['count'] ?? 0}',
+                      ),
+                    ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

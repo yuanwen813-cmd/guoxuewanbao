@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/common/common_result_models.dart';
 import '../../domain/history/divination_history.dart';
 import '../../features/auth/auth_store.dart';
+import '../../features/account/user_data_api.dart';
 import '../local_persistence/local_json_store.dart';
 
 /// 历史记录服务。
@@ -17,10 +19,22 @@ class HistoryService extends ChangeNotifier {
   final List<DivinationHistory> _records = [];
   final String ownerKey;
   final String _storageKey;
+  final String _deletedStorageKey;
+  final String? _token;
+  final UserDataApi? _cloudApi;
+  final Set<String> _pendingDeletedIds = {};
+  bool _syncing = false;
 
-  HistoryService({String? ownerKey})
-      : ownerKey = _normalizeOwnerKey(ownerKey),
-        _storageKey = '$_storageKeyPrefix.${_normalizeOwnerKey(ownerKey)}' {
+  HistoryService({
+    String? ownerKey,
+    String? token,
+    UserDataApi? cloudApi,
+  })  : ownerKey = _normalizeOwnerKey(ownerKey),
+        _storageKey = '$_storageKeyPrefix.${_normalizeOwnerKey(ownerKey)}',
+        _deletedStorageKey =
+            '$_storageKeyPrefix.${_normalizeOwnerKey(ownerKey)}.deleted',
+        _token = token,
+        _cloudApi = cloudApi {
     _load();
   }
 
@@ -39,10 +53,12 @@ class HistoryService extends ChangeNotifier {
   }
 
   void save(DivinationHistory record) {
-    _records.removeWhere((r) => r.id == record.id);
-    _records.insert(0, record);
+    final updated = _withUpdatedAt(record, DateTime.now());
+    _records.removeWhere((r) => r.id == updated.id);
+    _records.insert(0, updated);
     _persist();
     notifyListeners();
+    _syncRecords([updated]);
   }
 
   List<DivinationHistory> getAll() => List.unmodifiable(_records);
@@ -61,6 +77,7 @@ class HistoryService extends ChangeNotifier {
     _records.removeWhere((r) => r.id == id);
     _persist();
     notifyListeners();
+    _syncDeleted([id]);
   }
 
   DivinationHistory saveResultSnapshot(CommonDivinationResult result) {
@@ -77,6 +94,7 @@ class HistoryService extends ChangeNotifier {
       featureName: result.featureName,
       question: result.userQuestion,
       createdAt: result.createdAt,
+      updatedAt: DateTime.now(),
       summary: result.summary,
       resultJson: const JsonEncoder().convert(updatedSnapshot),
       tags: result.tags ?? old?.tags ?? const [],
@@ -89,6 +107,7 @@ class HistoryService extends ChangeNotifier {
     }
     _persist();
     notifyListeners();
+    _syncRecords([record]);
     return record;
   }
 
@@ -116,6 +135,7 @@ class HistoryService extends ChangeNotifier {
       featureName: old.featureName,
       question: old.question,
       createdAt: old.createdAt,
+      updatedAt: DateTime.now(),
       summary: old.summary,
       resultJson: old.resultJson,
       tags: old.tags,
@@ -123,6 +143,7 @@ class HistoryService extends ChangeNotifier {
     );
     _persist();
     notifyListeners();
+    _syncRecords([_records[idx]]);
   }
 
   List<DivinationHistory> search(String keyword) {
@@ -201,6 +222,14 @@ class HistoryService extends ChangeNotifier {
 
   int get favoriteCount => _records.where((r) => r.isFavorite).length;
 
+  Future<void> clearLocalData() async {
+    _records.clear();
+    _pendingDeletedIds.clear();
+    await _persist();
+    await _persistPendingDeletes();
+    notifyListeners();
+  }
+
   bool _matchesResult(
     DivinationHistory record,
     CommonDivinationResult result,
@@ -223,22 +252,133 @@ class HistoryService extends ChangeNotifier {
 
   Future<void> _load() async {
     try {
+      await _loadPendingDeletes();
       final raw = await readLocalJson(_storageKey);
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw) as List<dynamic>;
-      _records
-        ..clear()
-        ..addAll(
-          decoded.map(
-            (item) => DivinationHistory.fromJson(
-              item as Map<String, dynamic>,
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw) as List<dynamic>;
+        _records
+          ..clear()
+          ..addAll(
+            decoded.map(
+              (item) => DivinationHistory.fromJson(
+                item as Map<String, dynamic>,
+              ),
             ),
-          ),
-        );
-      notifyListeners();
+          );
+        notifyListeners();
+      }
+      await _initialCloudSync();
     } catch (_) {
       // 本地缓存损坏时不阻塞页面；下一次保存会重写快照。
+      await _initialCloudSync();
     }
+  }
+
+  Future<void> _initialCloudSync() async {
+    final token = _token;
+    final api = _cloudApi;
+    if (token == null || token.isEmpty || api == null || _syncing) return;
+    _syncing = true;
+    try {
+      if (_pendingDeletedIds.isNotEmpty) {
+        await api.sync(
+          token,
+          deletedHistoryIds: _pendingDeletedIds.toList(),
+        );
+        _pendingDeletedIds.clear();
+        await _persistPendingDeletes();
+      }
+      final snapshots = _records.map((item) => item.toJson()).toList();
+      var cloud = await api.fetch(token);
+      for (var offset = 0; offset < snapshots.length; offset += 25) {
+        final end =
+            offset + 25 < snapshots.length ? offset + 25 : snapshots.length;
+        cloud = await api.sync(
+          token,
+          histories: snapshots.sublist(offset, end),
+        );
+      }
+      final merged = <String, DivinationHistory>{
+        for (final item in _records) item.id: item,
+      };
+      for (final raw in cloud.histories) {
+        final remote = DivinationHistory.fromJson(raw);
+        if (_pendingDeletedIds.contains(remote.id)) continue;
+        final local = merged[remote.id];
+        if (local == null || remote.updatedAt.isAfter(local.updatedAt)) {
+          merged[remote.id] = remote;
+        }
+      }
+      _records
+        ..clear()
+        ..addAll(merged.values);
+      _records.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      await _persist();
+      notifyListeners();
+    } catch (_) {
+      // 云端不可用时继续使用本地记录，下次登录或修改时会再次同步。
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  void _syncRecords(List<DivinationHistory> records) {
+    final token = _token;
+    final api = _cloudApi;
+    if (token == null || token.isEmpty || api == null) return;
+    unawaited(api
+        .sync(
+          token,
+          histories: records.map((item) => item.toJson()).toList(),
+        )
+        .then<void>((_) {}, onError: (_) {}));
+  }
+
+  void _syncDeleted(List<String> ids) {
+    _pendingDeletedIds.addAll(ids);
+    unawaited(_persistPendingDeletes());
+    final token = _token;
+    final api = _cloudApi;
+    if (token == null || token.isEmpty || api == null) return;
+    unawaited(api.sync(token, deletedHistoryIds: ids).then<void>((_) {
+      _pendingDeletedIds.removeAll(ids);
+      return _persistPendingDeletes();
+    }, onError: (_) {}));
+  }
+
+  Future<void> _loadPendingDeletes() async {
+    try {
+      final raw = await readLocalJson(_deletedStorageKey);
+      if (raw == null || raw.isEmpty) return;
+      _pendingDeletedIds.addAll((jsonDecode(raw) as List).cast<String>());
+    } catch (_) {
+      _pendingDeletedIds.clear();
+    }
+  }
+
+  Future<void> _persistPendingDeletes() {
+    return writeLocalJson(
+      _deletedStorageKey,
+      jsonEncode(_pendingDeletedIds.toList()),
+    );
+  }
+
+  DivinationHistory _withUpdatedAt(
+    DivinationHistory record,
+    DateTime updatedAt,
+  ) {
+    return DivinationHistory(
+      id: record.id,
+      featureId: record.featureId,
+      featureName: record.featureName,
+      question: record.question,
+      createdAt: record.createdAt,
+      updatedAt: updatedAt,
+      summary: record.summary,
+      resultJson: record.resultJson,
+      tags: record.tags,
+      isFavorite: record.isFavorite,
+    );
   }
 
   Future<void> _persist() async {
@@ -249,5 +389,9 @@ class HistoryService extends ChangeNotifier {
 
 final historyServiceProvider = ChangeNotifierProvider<HistoryService>((ref) {
   final auth = ref.watch(authStoreProvider);
-  return HistoryService(ownerKey: HistoryService.ownerKeyFromAuth(auth));
+  return HistoryService(
+    ownerKey: HistoryService.ownerKeyFromAuth(auth),
+    token: auth.token,
+    cloudApi: auth.isAuthenticated ? UserDataApi() : null,
+  );
 });

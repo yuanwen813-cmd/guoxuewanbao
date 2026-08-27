@@ -94,4 +94,5 @@ class RouteNames {
   static const settings = 'settings';
   static const privacy = 'privacy';
   static const disclaimer = 'disclaimer';
+  static const accountData = 'account_data';
 }

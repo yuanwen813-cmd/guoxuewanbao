@@ -7,6 +7,7 @@ class DivinationHistory {
   final String featureName;
   final String? question;
   final DateTime createdAt;
+  final DateTime updatedAt;
   final String summary;
   final String resultJson;
   final List<String> tags;
@@ -18,26 +19,41 @@ class DivinationHistory {
     required this.featureName,
     this.question,
     required this.createdAt,
+    DateTime? updatedAt,
     required this.summary,
     required this.resultJson,
     this.tags = const [],
     this.isFavorite = false,
-  });
+  }) : updatedAt = updatedAt ?? createdAt;
 
-  Map<String, dynamic> get resultSnapshot => json.decode(resultJson) as Map<String, dynamic>;
+  Map<String, dynamic> get resultSnapshot =>
+      json.decode(resultJson) as Map<String, dynamic>;
 
   Map<String, dynamic> toJson() => {
-    'id': id, 'featureId': featureId, 'featureName': featureName,
-    'question': question, 'createdAt': createdAt.toIso8601String(),
-    'summary': summary, 'resultJson': resultJson, 'tags': tags, 'isFavorite': isFavorite,
-  };
+        'id': id,
+        'featureId': featureId,
+        'featureName': featureName,
+        'question': question,
+        'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
+        'summary': summary,
+        'resultJson': resultJson,
+        'tags': tags,
+        'isFavorite': isFavorite,
+      };
 
-  factory DivinationHistory.fromJson(Map<String, dynamic> j) => DivinationHistory(
-    id: j['id'] as String, featureId: j['featureId'] as String,
-    featureName: j['featureName'] as String, question: j['question'] as String?,
-    createdAt: DateTime.parse(j['createdAt'] as String),
-    summary: j['summary'] as String? ?? '', resultJson: j['resultJson'] as String? ?? '{}',
-    tags: (j['tags'] as List?)?.cast<String>() ?? [],
-    isFavorite: j['isFavorite'] as bool? ?? false,
-  );
+  factory DivinationHistory.fromJson(Map<String, dynamic> j) =>
+      DivinationHistory(
+        id: j['id'] as String,
+        featureId: j['featureId'] as String,
+        featureName: j['featureName'] as String,
+        question: j['question'] as String?,
+        createdAt: DateTime.parse(j['createdAt'] as String),
+        updatedAt: DateTime.tryParse(j['updatedAt'] as String? ?? '') ??
+            DateTime.parse(j['createdAt'] as String),
+        summary: j['summary'] as String? ?? '',
+        resultJson: j['resultJson'] as String? ?? '{}',
+        tags: (j['tags'] as List?)?.cast<String>() ?? [],
+        isFavorite: j['isFavorite'] as bool? ?? false,
+      );
 }

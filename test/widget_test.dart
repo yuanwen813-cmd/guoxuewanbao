@@ -408,8 +408,7 @@ void main() {
     expect(briefButton.onPressed, isNotNull);
   });
 
-  testWidgets('apk download page exposes android package link',
-      (tester) async {
+  testWidgets('apk download page exposes android package link', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: ApkDownloadPage(),
@@ -573,6 +572,7 @@ void main() {
       '/flutter_service_worker.js',
       '/main.dart.js',
       '/manifest.json',
+      '/pwa_helper.js',
       '/reset-cache.html',
       '/downloads/guoxuewanbao-latest.apk',
     ]) {
@@ -581,8 +581,11 @@ void main() {
 
     expect(vercel, contains('no-store, max-age=0'));
     expect(vercel, contains('no-cache, max-age=0, must-revalidate'));
-    expect(index, contains('flutter_bootstrap.js?v=20260707-cache1'));
-    expect(index, contains('manifest.json?v=20260707-cache1'));
+    expect(index, contains('flutter_bootstrap.js?v=20260827-sync1'));
+    expect(index, contains('manifest.json?v=20260827-sync1'));
+    expect(index, contains('pwa_helper.js?v=20260827-sync1'));
+    expect(File('web/pwa_helper.js').readAsStringSync(),
+        contains('beforeinstallprompt'));
     expect(resetCache, contains('正在清理浏览器缓存'));
     expect(resetCache, contains('cache_reset='));
     expect(vercel, contains('application/vnd.android.package-archive'));
@@ -629,6 +632,7 @@ void main() {
                     reportType: 'question_brief',
                     priceLabel: '¥1',
                     text: '已保存的 AI 解析内容。',
+                    reportId: '00000000-0000-0000-0000-000000000001',
                     createdAt: DateTime(2026, 7, 3, 10),
                   ),
                 ],
@@ -643,11 +647,45 @@ void main() {
     expect(find.text('已保存的 AI 解析内容。'), findsOneWidget);
     expect(find.byKey(const Key('ai_report_copy_coin_hexagram_question_brief')),
         findsOneWidget);
+    expect(
+      find.byKey(const Key('ai_report_helpful_coin_hexagram_question_brief')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+          const Key('ai_report_not_helpful_coin_hexagram_question_brief')),
+      findsOneWidget,
+    );
 
     final button = tester.widget<FilledButton>(
       find.byKey(const Key('ai_report_coin_hexagram_question_brief')),
     );
     expect(button.onPressed, isNull);
+  });
+
+  test('cloud data API stays inside the unified Vercel function', () {
+    final api = File('api/index.js').readAsStringSync();
+    final schema = File('supabase/schema.sql').readAsStringSync();
+
+    for (final route in [
+      'user-data',
+      'account-export',
+      'account-delete',
+      'ai-report-feedback',
+      'attribution-record',
+    ]) {
+      expect(api, contains("'$route'"));
+    }
+    for (final table in [
+      'user_history_records',
+      'birth_profiles',
+      'ai_report_feedback',
+      'user_attributions',
+    ]) {
+      expect(schema, contains('create table if not exists $table'));
+      expect(schema, contains('alter table $table enable row level security'));
+    }
+    expect(schema, contains('create or replace function delete_account_data'));
   });
 
   testWidgets('result page save uses current AI report snapshot',
