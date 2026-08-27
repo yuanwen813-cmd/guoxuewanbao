@@ -18,6 +18,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="国学占卜、命理、风水、通书 APP。">
 
   <!-- iOS meta tags & icons -->
@@ -30,10 +31,123 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>国学万宝匣</title>
-  <link rel="manifest" href="manifest.json?v=20260827-sync1">
+  <link rel="manifest" href="manifest.json?v=20260827-compat1">
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #f7f4ee;
+    }
+
+    #app-loader {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483646;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+      background: #f7f4ee;
+      color: #2d261f;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .app-loader-content {
+      width: min(360px, 100%);
+      text-align: center;
+    }
+
+    .app-loader-mark {
+      width: 44px;
+      height: 44px;
+      margin: 0 auto 18px;
+      border: 3px solid #dcccad;
+      border-top-color: #9c2f2f;
+      border-radius: 50%;
+      animation: app-loader-spin .9s linear infinite;
+    }
+
+    .app-loader-title {
+      margin: 0 0 8px;
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    .app-loader-status {
+      margin: 0;
+      color: #6d6258;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    #app-loader-retry {
+      display: none;
+      margin: 18px auto 0;
+      border: 1px solid #9c2f2f;
+      border-radius: 6px;
+      padding: 9px 18px;
+      background: #fffaf2;
+      color: #9c2f2f;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    @keyframes app-loader-spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
-  <script src="pwa_helper.js?v=20260827-sync1" defer></script>
-  <script src="flutter_bootstrap.js?v=20260827-sync1" async></script>
+  <div id="app-loader" role="status" aria-live="polite">
+    <div class="app-loader-content">
+      <div class="app-loader-mark" aria-hidden="true"></div>
+      <h1 class="app-loader-title">国学万宝匣</h1>
+      <p id="app-loader-status" class="app-loader-status">正在加载，请稍候...</p>
+      <button id="app-loader-retry" type="button">重新加载</button>
+    </div>
+  </div>
+  <noscript>请启用浏览器 JavaScript 后访问国学万宝匣。</noscript>
+  <script>
+    (function () {
+      var loader = document.getElementById('app-loader');
+      var status = document.getElementById('app-loader-status');
+      var retry = document.getElementById('app-loader-retry');
+      var finished = false;
+
+      function finishLoading() {
+        if (finished) return;
+        finished = true;
+        if (loader && loader.parentNode) loader.parentNode.removeChild(loader);
+      }
+
+      function showLoadProblem(message) {
+        if (finished || !status || !retry) return;
+        status.textContent = message;
+        retry.style.display = 'block';
+      }
+
+      retry.addEventListener('click', function () {
+        var separator = window.location.search ? '&' : '?';
+        window.location.replace(window.location.href + separator + 'reload=' + Date.now());
+      });
+
+      window.addEventListener('flutter-first-frame', finishLoading);
+      window.addEventListener('error', function (event) {
+        if (event.target && event.target !== window && event.target.tagName === 'SCRIPT') {
+          showLoadProblem('程序资源加载失败，请检查网络后重新加载。');
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function () {
+        showLoadProblem('程序启动未完成，请重新加载或更换最新版浏览器。');
+      });
+
+      window.setTimeout(function () {
+        showLoadProblem('加载时间较长，请检查网络后重试；也可更换 Chrome 或 Edge 浏览器。');
+      }, 20000);
+    })();
+  </script>
+  <script src="pwa_helper.js?v=20260827-compat1" defer></script>
+  <script src="flutter_bootstrap.js?v=20260827-compat1" async></script>
 </body>
 </html>

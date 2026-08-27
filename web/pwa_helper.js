@@ -4,6 +4,29 @@
   var installPrompt = null;
   var banner = null;
 
+  async function removeLegacyFlutterCache() {
+    if ('serviceWorker' in navigator) {
+      var registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(function (registration) {
+        var worker = registration.active || registration.waiting || registration.installing;
+        if (worker && worker.scriptURL.indexOf('/flutter_service_worker.js') !== -1) {
+          return registration.unregister();
+        }
+        return Promise.resolve(false);
+      }));
+    }
+
+    if ('caches' in window) {
+      var cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(function (name) {
+        if (name.indexOf('flutter-app-') === 0 || name.indexOf('flutter-temp-') === 0) {
+          return caches.delete(name);
+        }
+        return Promise.resolve(false);
+      }));
+    }
+  }
+
   function createBanner() {
     if (banner) return banner;
     banner = document.createElement('div');
@@ -119,6 +142,7 @@
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', async function () {
+      await removeLegacyFlutterCache().catch(function () {});
       var registration = await navigator.serviceWorker.getRegistration();
       watchRegistration(registration);
       if (registration) registration.update().catch(function () {});

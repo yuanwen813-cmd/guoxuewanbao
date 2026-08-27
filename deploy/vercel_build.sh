@@ -25,4 +25,9 @@ export PATH="$PATH:$FLUTTER_DIR/bin"
 flutter --version
 flutter config --enable-web
 flutter pub get
-flutter build web --release --dart-define=GUOXUE_API_BASE_URL="$API_BASE_URL"
+rm -rf build/web
+flutter build web \
+  --release \
+  --web-renderer html \
+  --pwa-strategy=none \
+  --dart-define=GUOXUE_API_BASE_URL="$API_BASE_URL"

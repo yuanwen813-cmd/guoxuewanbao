@@ -581,11 +581,17 @@ void main() {
 
     expect(vercel, contains('no-store, max-age=0'));
     expect(vercel, contains('no-cache, max-age=0, must-revalidate'));
-    expect(index, contains('flutter_bootstrap.js?v=20260827-sync1'));
-    expect(index, contains('manifest.json?v=20260827-sync1'));
-    expect(index, contains('pwa_helper.js?v=20260827-sync1'));
-    expect(File('web/pwa_helper.js').readAsStringSync(),
-        contains('beforeinstallprompt'));
+    expect(index, contains('flutter_bootstrap.js?v=20260827-compat1'));
+    expect(index, contains('manifest.json?v=20260827-compat1'));
+    expect(index, contains('pwa_helper.js?v=20260827-compat1'));
+    expect(index, contains('正在加载，请稍候'));
+    expect(index, contains('flutter-first-frame'));
+    final pwaHelper = File('web/pwa_helper.js').readAsStringSync();
+    expect(pwaHelper, contains('beforeinstallprompt'));
+    expect(pwaHelper, contains('removeLegacyFlutterCache'));
+    final vercelBuild = File('deploy/vercel_build.sh').readAsStringSync();
+    expect(vercelBuild, contains('--web-renderer html'));
+    expect(vercelBuild, contains('--pwa-strategy=none'));
     expect(resetCache, contains('正在清理浏览器缓存'));
     expect(resetCache, contains('cache_reset='));
     expect(vercel, contains('application/vnd.android.package-archive'));
