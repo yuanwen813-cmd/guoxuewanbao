@@ -89,6 +89,7 @@ function newOutTradeNo(provider) {
 }
 
 async function getWallet(userId) {
+  await reconcileEmptyAiReportsForUser(userId);
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase
     .from('wallets')
@@ -97,6 +98,37 @@ async function getWallet(userId) {
     .single();
   if (error) throw new HttpError(500, '钱包读取失败', error.message);
   return mapWallet(data);
+}
+
+async function reconcileEmptyAiReportsForUser(userId) {
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from('ai_report_orders')
+    .select('id, result_text')
+    .eq('user_id', userId)
+    .eq('status', 'completed')
+    .order('updated_at', { ascending: false })
+    .limit(50);
+
+  if (error) {
+    throw new HttpError(500, 'AI 报告状态核对失败', error.message);
+  }
+
+  const emptyOrders = (data || []).filter((order) =>
+    isInvalidAiReportText(order.result_text),
+  );
+  for (const order of emptyOrders) {
+    await refundAiReport({
+      orderId: order.id,
+      errorMessage: 'AI 服务未返回有效内容，已自动退款',
+      model: null,
+    });
+  }
+}
+
+function isInvalidAiReportText(value) {
+  const text = String(value || '').trim();
+  return !text || text === 'AI 服务未返回内容。' || text === 'AI 服务未返回内容';
 }
 
 async function grantRegistrationBonusIfEligible(userId) {
@@ -301,10 +333,14 @@ async function createAiReportDebit({
 }
 
 async function completeAiReport({ orderId, resultText, model, usage }) {
+  const normalizedResult = String(resultText || '').trim();
+  if (!normalizedResult) {
+    throw new HttpError(424, 'AI 服务未返回有效内容');
+  }
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase.rpc('complete_ai_report_order', {
     p_order_id: orderId,
-    p_result_text: resultText || '',
+    p_result_text: normalizedResult,
     p_model: model || null,
     p_request_tokens: usage?.prompt_tokens || null,
     p_response_tokens: usage?.completion_tokens || null,
@@ -352,6 +388,8 @@ module.exports = {
   getAiReportForUser,
   getRechargeOrderForUser,
   getWallet,
+  isInvalidAiReportText,
+  reconcileEmptyAiReportsForUser,
   insertPaymentNotifyLog,
   listWalletTransactions,
   markPaymentNotifyLog,

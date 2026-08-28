@@ -4,6 +4,7 @@ const {
   completeAiReport,
   createAiReportDebit,
   getAiReportForUser,
+  reconcileEmptyAiReportsForUser,
   refundAiReport,
 } = require('./walletService');
 const { buildAiReportSystemPrompt } = require('./promptLoader');
@@ -46,6 +47,14 @@ function assertJsonSizeLimit(name, value, maxChars) {
   return value || {};
 }
 
+function ensureAiAnswer(value) {
+  const answer = String(value || '').trim();
+  if (!answer) {
+    throw new HttpError(424, 'AI 服务未返回有效内容');
+  }
+  return answer;
+}
+
 async function callDeepSeek({ product, systemPrompt, userPrompt, temperature }) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new HttpError(503, '服务端未配置 DeepSeek API Key');
@@ -73,8 +82,11 @@ async function callDeepSeek({ product, systemPrompt, userPrompt, temperature }) 
       data.error?.message || data.message || `AI 服务暂时不可用：${response.status}`;
     throw new HttpError(response.status, message, data);
   }
+
+  const answer = ensureAiAnswer(data.choices?.[0]?.message?.content);
+
   return {
-    answer: data.choices?.[0]?.message?.content || '',
+    answer,
     usage: data.usage || {},
     model: data.model || product.model,
   };
@@ -170,10 +182,15 @@ async function generateAiReport({ userId, body }) {
 
 async function getAiReportDetail({ userId, orderId }) {
   if (!orderId) throw new HttpError(400, '缺少报告 ID');
+  // Recover historical records created before empty AI responses were treated
+  // as failures. The wallet service only refunds completed orders with no
+  // valid content or the historic empty-response placeholder.
+  await reconcileEmptyAiReportsForUser(userId);
   return getAiReportForUser({ userId, orderId });
 }
 
 module.exports = {
+  ensureAiAnswer,
   generateAiReport,
   getAiReportDetail,
 };

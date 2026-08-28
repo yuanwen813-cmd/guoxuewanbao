@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,9 +5,11 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../infrastructure/history_service/history_service.dart';
+import '../../shared/utils/html_file_export.dart';
 import '../auth/auth_store.dart';
 import '../v2/natal_profile_store.dart';
 import '../wallet/wallet_store.dart';
+import 'account_data_export_document.dart';
 import 'user_data_api.dart';
 
 class AccountDataPage extends ConsumerStatefulWidget {
@@ -74,7 +74,16 @@ class _AccountDataPageState extends ConsumerState<AccountDataPage> {
     setState(() => _working = true);
     try {
       final data = await _api.exportAccount(token);
-      final text = const JsonEncoder.withIndent('  ').convert(data);
+      final exportedAt = DateTime.now();
+      final text = AccountDataExportDocument.buildPlainText(
+        data,
+        exportedAt: exportedAt,
+      );
+      final html = AccountDataExportDocument.buildHtml(
+        data,
+        exportedAt: exportedAt,
+      );
+      final filename = AccountDataExportDocument.buildFileName(exportedAt);
       if (!mounted) return;
       await showModalBottomSheet<void>(
         context: context,
@@ -91,15 +100,33 @@ class _AccountDataPageState extends ConsumerState<AccountDataPage> {
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
-                const Text('请选择复制或系统分享。导出内容含个人资料，请妥善保管。'),
+                const Text('可下载为便于阅读的 HTML 文件。导出内容含个人资料，请妥善保管。'),
                 const SizedBox(height: 16),
                 FilledButton.icon(
+                  onPressed: () async {
+                    try {
+                      await downloadHtmlFile(
+                        filename: filename,
+                        html: html,
+                        subject: '国学万宝匣个人数据导出',
+                      );
+                      if (context.mounted) Navigator.pop(context);
+                    } catch (_) {
+                      if (context.mounted) {
+                        _showMessage('导出文件失败，请稍后重试');
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.file_download_outlined),
+                  label: const Text('下载 HTML 文件'),
+                ),
+                OutlinedButton.icon(
                   onPressed: () async {
                     await Clipboard.setData(ClipboardData(text: text));
                     if (context.mounted) Navigator.pop(context);
                   },
                   icon: const Icon(Icons.copy_all_outlined),
-                  label: const Text('复制导出内容'),
+                  label: const Text('复制可读文本'),
                 ),
                 OutlinedButton.icon(
                   onPressed: () => Share.share(

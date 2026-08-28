@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -42,6 +44,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   final Map<String, String> _errors = {};
   final Map<String, String> _reportIds = {};
   final Map<String, String> _feedback = {};
+  final Set<String> _legacyEmptyResponseProducts = {};
   String? _loadingProductId;
 
   @override
@@ -49,6 +52,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
     super.initState();
     _applyInitialFocus();
     _applyInitialReports();
+    unawaited(_recoverLegacyEmptyResponses());
   }
 
   @override
@@ -60,6 +64,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
     }
     if (oldWidget.initialReports != widget.initialReports) {
       _applyInitialReports();
+      unawaited(_recoverLegacyEmptyResponses());
     }
   }
 
@@ -77,14 +82,50 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   }
 
   void _applyInitialReports() {
+    _legacyEmptyResponseProducts.clear();
     for (final report in widget.initialReports) {
       final text = report.text.trim();
+      if (_isEmptyResponsePlaceholder(text)) {
+        _legacyEmptyResponseProducts.add(report.productId);
+        _answers.remove(report.productId);
+        _reportIds.remove(report.productId);
+        _errors[report.productId] = '上一次 AI 未返回有效内容，正在核对退款。';
+        continue;
+      }
       if (report.productId.isNotEmpty && text.isNotEmpty) {
         _answers.putIfAbsent(report.productId, () => text);
         if (report.reportId?.trim().isNotEmpty == true) {
           _reportIds.putIfAbsent(report.productId, () => report.reportId!);
         }
       }
+    }
+  }
+
+  bool _isEmptyResponsePlaceholder(String text) {
+    return text == 'AI 服务未返回内容。' || text == 'AI 服务未返回内容';
+  }
+
+  Future<void> _recoverLegacyEmptyResponses() async {
+    if (_legacyEmptyResponseProducts.isEmpty) return;
+
+    final products = Set<String>.from(_legacyEmptyResponseProducts);
+    try {
+      await ref.read(walletStoreProvider.notifier).syncFromServer();
+      if (!mounted) return;
+      setState(() {
+        for (final productId in products) {
+          _errors[productId] = '上一次 AI 未返回有效内容，费用已自动退回。你可以重新解析。';
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        for (final productId in products) {
+          _errors[productId] = ref.read(authStoreProvider).isAuthenticated
+              ? '上一次 AI 未返回有效内容，请在钱包流水核对退款后重新解析。'
+              : '上一次 AI 未返回有效内容，请登录后核对退款并重新解析。';
+        }
+      });
     }
   }
 
@@ -249,9 +290,23 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
                 sourceJson: widget.sourceJson,
               );
       if (!mounted) return;
+      final answer = result.answer.trim();
+      if (answer.isEmpty) {
+        try {
+          await ref.read(walletStoreProvider.notifier).syncFromServer();
+        } catch (_) {
+          // The server is responsible for the refund; preserve a retry path
+          // even when the balance refresh is temporarily unavailable.
+        }
+        if (!mounted) return;
+        setState(() {
+          _answers.remove(config.id);
+          _errors[config.id] = 'AI 未返回有效内容，请在钱包流水核对退款后重新解析。';
+        });
+        return;
+      }
       setState(() {
-        _answers[config.id] =
-            result.answer.trim().isEmpty ? 'AI 服务未返回内容。' : result.answer.trim();
+        _answers[config.id] = answer;
         if (result.reportId?.trim().isNotEmpty == true) {
           _reportIds[config.id] = result.reportId!;
         }
@@ -381,6 +436,7 @@ class _AiReportProductTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasAnswer = answer?.trim().isNotEmpty == true;
+    final canRetry = error != null && !hasAnswer;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -443,7 +499,11 @@ class _AiReportProductTile extends StatelessWidget {
                     : hasAnswer
                         ? const Icon(Icons.check_circle_outline)
                         : const Icon(Icons.psychology_alt_outlined),
-                label: Text(loading ? '生成中' : (hasAnswer ? '已生成' : '生成报告')),
+                label: Text(
+                  loading
+                      ? '生成中'
+                      : (hasAnswer ? '已生成' : (canRetry ? '重新解析' : '生成报告')),
+                ),
               ),
             ],
           ),
