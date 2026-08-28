@@ -13,6 +13,7 @@ import '../../../infrastructure/history_service/history_service.dart';
 import '../../../shared/disclaimer/disclaimer_block.dart';
 import '../../../shared/widgets/classical_card.dart';
 import '../../../shared/widgets/guoxue_button.dart';
+import '../../ask_guidance/ask_question_template_panel.dart';
 
 class SmallLiurenPage extends ConsumerStatefulWidget {
   const SmallLiurenPage({super.key});
@@ -360,13 +361,26 @@ class _SmallLiurenPageState extends ConsumerState<SmallLiurenPage> {
                           maxLength: 200,
                           style: const TextStyle(color: Colors.white70),
                           decoration: const InputDecoration(
-                                  hintText: '请输入你要问的事情，例如：今天面试结果如何？',
+                                  hintText: '写下你现在最想问的一件事，例如：今天面试结果如何？',
                                   hintStyle: TextStyle(color: Colors.white38),
                                   border: OutlineInputBorder(),
                                   filled: true,
                                   fillColor: Color(0xFF1A1410))
                               .copyWith(counterText: '')),
+                      const SizedBox(height: 8),
+                      Text(
+                        '一次尽量只问一件事，问题越具体，越容易理解结果。',
+                        style: GuoXueTypography.caption
+                            .copyWith(color: Colors.white38),
+                      ),
                     ])),
+            const SizedBox(height: 16),
+            AskQuestionTemplatePanel(
+              controller: _questionCtl,
+              backgroundColor: const Color(0xFF2A2218),
+              foregroundColor: GuoXueColors.ricePaper,
+              mutedColor: Colors.white38,
+            ),
             const SizedBox(height: 16),
 
             // Mode selector

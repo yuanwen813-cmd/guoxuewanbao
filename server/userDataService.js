@@ -243,7 +243,7 @@ async function recordAttribution(userId, body) {
 
 async function exportAccountData(userId) {
   const supabase = getSupabaseServiceClient();
-  const [user, wallet, transactions, recharges, reports, feedback, synced] =
+  const [user, wallet, transactions, recharges, reports, synced] =
     await Promise.all([
       supabase.from('app_users').select('*').eq('id', userId).single(),
       supabase.from('wallets').select('*').eq('user_id', userId).single(),
@@ -253,23 +253,94 @@ async function exportAccountData(userId) {
         .order('created_at', { ascending: false }).limit(1000),
       supabase.from('ai_report_orders').select('*').eq('user_id', userId)
         .order('created_at', { ascending: false }).limit(1000),
-      supabase.from('ai_report_feedback').select('*').eq('user_id', userId)
-        .order('created_at', { ascending: false }).limit(1000),
       getUserData(userId),
     ]);
-  const failed = [user, wallet, transactions, recharges, reports, feedback]
+  const failed = [user, wallet, transactions, recharges, reports]
     .find((result) => result.error);
   if (failed) throw new HttpError(500, '个人数据导出失败', failed.error.message);
-  return {
-    exportedAt: new Date().toISOString(),
+  return buildAccountExportData({
     account: user.data,
     wallet: wallet.data,
     walletTransactions: transactions.data || [],
     rechargeOrders: recharges.data || [],
     aiReports: reports.data || [],
-    aiReportFeedback: feedback.data || [],
     histories: synced.histories,
     birthProfiles: synced.profiles,
+  });
+}
+
+function buildAccountExportData({
+  account,
+  wallet,
+  walletTransactions = [],
+  rechargeOrders = [],
+  aiReports = [],
+  histories = [],
+  birthProfiles = [],
+}) {
+  return {
+    exportedAt: new Date().toISOString(),
+    account: {
+      phone: account?.phone || null,
+      nickname: account?.nickname || null,
+      status: account?.status || null,
+      createdAt: account?.created_at || null,
+      updatedAt: account?.updated_at || null,
+    },
+    wallet: {
+      balanceCents: Number(wallet?.balance_cents || 0),
+      currency: wallet?.currency || 'CNY',
+      updatedAt: wallet?.updated_at || wallet?.created_at || null,
+    },
+    walletTransactions: walletTransactions.map((row) => ({
+      type: row.type || null,
+      amountCents: Number(row.amount_cents || 0),
+      balanceAfterCents: Number(row.balance_after_cents || 0),
+      currency: row.currency || 'CNY',
+      note: cleanText(row.note, 1000),
+      createdAt: row.created_at || null,
+    })),
+    rechargeOrders: rechargeOrders.map((row) => ({
+      provider: row.provider || null,
+      amountCents: Number(row.amount_cents || 0),
+      currency: row.currency || 'CNY',
+      status: row.status || null,
+      paidAt: row.paid_at || null,
+      createdAt: row.created_at || null,
+      updatedAt: row.updated_at || null,
+    })),
+    aiReports: aiReports.map((row) => ({
+      reportType: row.report_type || null,
+      priceCents: Number(row.price_cents || 0),
+      currency: row.currency || 'CNY',
+      status: row.status || null,
+      resultText: row.result_text || null,
+      createdAt: row.created_at || null,
+      updatedAt: row.updated_at || null,
+    })),
+    histories: histories.map((row) => ({
+      featureName: row.featureName || row.featureId || '问事记录',
+      question: cleanText(row.question, 2000),
+      summary: cleanText(row.summary, 10000),
+      tags: Array.isArray(row.tags)
+        ? row.tags.map((tag) => cleanText(tag, 80)).filter(Boolean)
+        : [],
+      isFavorite: Boolean(row.isFavorite),
+      createdAt: row.createdAt || null,
+      updatedAt: row.updatedAt || row.createdAt || null,
+    })),
+    birthProfiles: birthProfiles.map((row) => ({
+      displayName: cleanText(row.displayName, 200) || '未命名档案',
+      relationship: cleanText(row.relationship, 40),
+      gender: cleanText(row.gender, 40),
+      gregorianBirthDateTime: row.gregorianBirthDateTime || null,
+      birthTimeAccuracy: cleanText(row.birthTimeAccuracy, 40),
+      birthPlaceName: cleanText(row.birthPlaceName, 300),
+      lunarBirthDateText: cleanText(row.lunarBirthDateText, 300),
+      notes: cleanText(row.notes, 2000),
+      createdAt: row.createdAt || null,
+      updatedAt: row.updatedAt || row.createdAt || null,
+    })),
   };
 }
 
@@ -295,6 +366,7 @@ async function deleteAccountData(userId, body) {
 }
 
 module.exports = {
+  buildAccountExportData,
   deleteAccountData,
   exportAccountData,
   getUserData,

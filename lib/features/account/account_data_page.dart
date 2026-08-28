@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../infrastructure/history_service/history_service.dart';
 import '../../shared/utils/html_file_export.dart';
@@ -75,10 +73,6 @@ class _AccountDataPageState extends ConsumerState<AccountDataPage> {
     try {
       final data = await _api.exportAccount(token);
       final exportedAt = DateTime.now();
-      final text = AccountDataExportDocument.buildPlainText(
-        data,
-        exportedAt: exportedAt,
-      );
       final html = AccountDataExportDocument.buildHtml(
         data,
         exportedAt: exportedAt,
@@ -119,22 +113,6 @@ class _AccountDataPageState extends ConsumerState<AccountDataPage> {
                   },
                   icon: const Icon(Icons.file_download_outlined),
                   label: const Text('下载 HTML 文件'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: text));
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.copy_all_outlined),
-                  label: const Text('复制可读文本'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () => Share.share(
-                    text,
-                    subject: '国学万宝匣个人数据导出',
-                  ),
-                  icon: const Icon(Icons.ios_share_outlined),
-                  label: const Text('系统分享'),
                 ),
               ],
             ),

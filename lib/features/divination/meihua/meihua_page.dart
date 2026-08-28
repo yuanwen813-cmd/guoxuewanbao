@@ -16,6 +16,7 @@ import '../../../infrastructure/history_service/history_service.dart';
 import '../../../shared/disclaimer/disclaimer_block.dart';
 import '../../../shared/widgets/classical_card.dart';
 import '../../../shared/widgets/guoxue_button.dart';
+import '../../ask_guidance/ask_question_template_panel.dart';
 
 enum MeiStep { askQuestion, getUpper, getLower, getMoving, preview, result }
 
@@ -461,9 +462,16 @@ class _MeihuaYiPageState extends ConsumerState<MeihuaYiPage> {
               maxLength: 200,
               maxLines: 2,
               decoration: GuoXueDecoration.guoxueInput(
-                      labelText: '', hintText: '例如：这件事能否成功？')
+                      labelText: '', hintText: '写下你现在最想问的一件事，例如：这件事能否成功？')
                   .copyWith(counterText: '')),
+          const SizedBox(height: 8),
+          Text(
+            '一次尽量只问一件事，问题越具体，越容易理解结果。',
+            style: GuoXueTypography.caption,
+          ),
         ])),
+        const SizedBox(height: 16),
+        AskQuestionTemplatePanel(controller: _questionCtl),
         const SizedBox(height: 16),
         ClassicalCard(
           child: Column(
