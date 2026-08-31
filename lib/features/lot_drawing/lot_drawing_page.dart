@@ -34,6 +34,7 @@ class _LotDrawingPageState extends ConsumerState<LotDrawingPage> {
   late final LotDrawingEngine _engine;
   bool _drawing = false;
   GuoxueResult? _result;
+  // ignore: unused_field
   bool _interpreting = false;
 
   @override
@@ -83,9 +84,13 @@ class _LotDrawingPageState extends ConsumerState<LotDrawingPage> {
         ),
         engine: _LotResultEngine(_result!),
       );
-      final withAI = await runner.run(null,
-          userQuestion: _questionController.text.trim());
-      if (mounted) setState(() { _result = withAI; _interpreting = false; });
+      final withAI =
+          await runner.run(null, userQuestion: _questionController.text.trim());
+      if (mounted)
+        setState(() {
+          _result = withAI;
+          _interpreting = false;
+        });
     } catch (_) {
       if (mounted) setState(() => _interpreting = false);
     }
@@ -145,12 +150,12 @@ class _LotDrawingPageState extends ConsumerState<LotDrawingPage> {
                   : Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.water_drop, size: 56,
-                            color: GuoXueColors.goldLight),
+                        const Icon(Icons.water_drop,
+                            size: 56, color: GuoXueColors.goldLight),
                         const SizedBox(height: 12),
                         Text(widget.lotConfig.subtitle,
-                            style: GuoXueTypography.h3.copyWith(
-                                color: GuoXueColors.ricePaper)),
+                            style: GuoXueTypography.h3
+                                .copyWith(color: GuoXueColors.ricePaper)),
                         const SizedBox(height: 8),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 24),

@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../app/theme/guoxue_colors.dart';
-import '../../app/theme/guoxue_decoration.dart';
 import '../../app/theme/guoxue_typography.dart';
 import '../../domain/common/common_result_models.dart';
 import '../../infrastructure/history_service/history_service.dart';

@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_decoration.dart';
-import '../../app/theme/guoxue_decoration.dart';
-import '../../app/theme/guoxue_typography.dart';
 
 /// 古风卡片组件
 class ClassicalCard extends StatelessWidget {
@@ -33,7 +31,10 @@ class ClassicalCard extends StatelessWidget {
         height: height,
         padding: padding ?? const EdgeInsets.all(16),
         decoration: color != null
-            ? BoxDecoration(color: color, borderRadius: BorderRadius.circular(12), border: Border.all(color: GuoXueColors.gold.withOpacity(0.15)))
+            ? BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: GuoXueColors.gold.withOpacity(0.15)))
             : GuoXueDecoration.classicalCard,
         child: child,
       ),

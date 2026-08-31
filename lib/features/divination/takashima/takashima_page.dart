@@ -32,12 +32,15 @@ class _TakashimaPageState extends ConsumerState<TakashimaPage> {
       TakashimaSegmentCastEngine(hexRepo: _hexRepo, yaoRepo: _yaoRepo);
   final _questionController = TextEditingController();
   int _gender = 0;
+  // ignore: unused_field
   bool _reposReady = false;
   List<TakashimaSegmentShakeResult> _shakes = [];
   bool _shaking = false;
+  // ignore: unused_field
   int _leftCount = 0, _rightCount = 0;
   TakashimaCastResult? _castResult;
   GuoxueResult? _result;
+  // ignore: unused_field
   bool _interpreting = false;
 
   final List<Map<String, dynamic>> _aiAttempts = [];
@@ -56,6 +59,7 @@ class _TakashimaPageState extends ConsumerState<TakashimaPage> {
   static const _aiTemperature = 0.3;
 
   static const _safeTiming = '时机判断：宜先稳后动，适合在信息更明确、风险更可控后再处理；不宜仅凭卦象作出财务或投资决策。';
+  // ignore: unused_field
   static const _financialDisclaimer =
       '当前问题涉及金融或投资相关内容。本解读仅从传统文化和卦象象意角度提供参考，不构成投资建议、行情预测、买卖指令或收益承诺。真实投资请结合实时市场数据、个人风险承受能力，并咨询具备资质的专业人士。';
   static const _sentenceSafeText =
@@ -380,6 +384,7 @@ class _TakashimaPageState extends ConsumerState<TakashimaPage> {
         rawData: cr.toJson());
   }
 
+  // ignore: unused_element
   Future<void> _aiInterpret() async {
     if (_result == null || _castResult == null) return;
     if (!_dataCompleteForAI(_castResult!)) {
@@ -569,9 +574,7 @@ class _TakashimaPageState extends ConsumerState<TakashimaPage> {
     final cr = _castResult;
     if (cr == null) return '{}';
     final mv = cr.movingYao;
-    final sp = _aiSystemPrompt ?? '',
-        up = _aiUserPrompt ?? '',
-        comb = '$sp\n$up';
+    final sp = _aiSystemPrompt ?? '', up = _aiUserPrompt ?? '';
     final eln =
         YaoLineInfo.buildLineName(position: mv.position, isYang: mv.isYang);
     final export = {

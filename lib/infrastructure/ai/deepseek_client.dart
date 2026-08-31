@@ -6,14 +6,10 @@ import 'package:dio/dio.dart';
 /// - 代理：proxyUrl = http://localhost:3000/api/interpret，Key 由代理持有
 class DeepSeekClient {
   final Dio _dio;
-  final String? _apiKey;
-  final String? _proxyUrl;
   final bool _useProxy;
 
   DeepSeekClient({String? apiKey, String? baseUrl, String? proxyUrl})
-      : _apiKey = apiKey,
-        _proxyUrl = proxyUrl,
-        _useProxy = proxyUrl != null && proxyUrl.isNotEmpty,
+      : _useProxy = proxyUrl != null && proxyUrl.isNotEmpty,
         _dio = Dio(BaseOptions(
           baseUrl: proxyUrl ?? baseUrl ?? 'https://api.deepseek.com',
           connectTimeout: const Duration(seconds: 30),

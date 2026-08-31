@@ -3,10 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers/ai_providers.dart';
 import '../../app/theme/guoxue_colors.dart';
-import '../../app/theme/guoxue_decoration.dart';
 import '../../app/theme/guoxue_typography.dart';
 import '../../application/dto/interpretation.dart';
-import '../../application/ports/ai_port.dart';
 import 'classical_card.dart';
 import 'classical_text_block.dart';
 import 'guoxue_button.dart';

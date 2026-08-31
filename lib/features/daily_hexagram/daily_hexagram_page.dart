@@ -35,6 +35,7 @@ class _DailyHexagramPageState extends ConsumerState<DailyHexagramPage> {
   bool _loading = true;
   CommonDivinationResult? _commonResult;
   DailyHexagramResult? _castResult; // cache to avoid re-casting
+  // ignore: unused_field
   bool _interpreting = false;
 
   // Check if today already has a record
@@ -174,6 +175,7 @@ class _DailyHexagramPageState extends ConsumerState<DailyHexagramPage> {
     ref.read(historyServiceProvider).save(record);
   }
 
+  // ignore: unused_element
   Future<void> _aiInterpret() async {
     if (_commonResult == null) return;
     setState(() => _interpreting = true);
@@ -266,7 +268,6 @@ class _DailyHexagramPageState extends ConsumerState<DailyHexagramPage> {
     final sp = '你是精通周易象数的传统文化解读师。只能根据提供的卦象解读，不得重新起卦修改卦象编造卦辞爻辞。'
         '解读三层：1.动爻51%主断；2.本卦30%当前环境；3.变卦19%后续趋势。'
         '语气要轻量温和像今日提醒，不要过于沉重。禁止绝对化恐吓式表达。本内容仅供传统文化研究和娱乐参考。';
-    final r = _castResult!;
     final cr = _commonResult!;
     final up = '用户所问：$_question\n今日日期：$_dateKey\n'
         '本卦：${cr.primaryHexagram?.name ?? ""} ${cr.primaryHexagram?.symbol ?? ""}\n卦辞：${cr.primaryHexagram?.judgment ?? ""}\n'

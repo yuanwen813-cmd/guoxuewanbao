@@ -283,8 +283,9 @@ async function markRechargePaid({
   amountCents,
   notifyLogId,
   rawPayload,
+  supabaseClient,
 }) {
-  const supabase = getSupabaseServiceClient();
+  const supabase = supabaseClient || getSupabaseServiceClient();
   const { data, error } = await supabase.rpc('mark_recharge_paid', {
     p_out_trade_no: outTradeNo,
     p_provider_trade_no: providerTradeNo || null,
@@ -307,8 +308,9 @@ async function createAiReportDebit({
   baziChartJson,
   questionResultJson,
   promptSnapshot,
+  supabaseClient,
 }) {
-  const supabase = getSupabaseServiceClient();
+  const supabase = supabaseClient || getSupabaseServiceClient();
   const { data, error } = await supabase.rpc('create_ai_report_debit', {
     p_user_id: userId,
     p_product_id: product.id,
@@ -332,12 +334,18 @@ async function createAiReportDebit({
   };
 }
 
-async function completeAiReport({ orderId, resultText, model, usage }) {
+async function completeAiReport({
+  orderId,
+  resultText,
+  model,
+  usage,
+  supabaseClient,
+}) {
   const normalizedResult = String(resultText || '').trim();
   if (!normalizedResult) {
     throw new HttpError(424, 'AI 服务未返回有效内容');
   }
-  const supabase = getSupabaseServiceClient();
+  const supabase = supabaseClient || getSupabaseServiceClient();
   const { data, error } = await supabase.rpc('complete_ai_report_order', {
     p_order_id: orderId,
     p_result_text: normalizedResult,
@@ -352,8 +360,13 @@ async function completeAiReport({ orderId, resultText, model, usage }) {
   };
 }
 
-async function refundAiReport({ orderId, errorMessage, model }) {
-  const supabase = getSupabaseServiceClient();
+async function refundAiReport({
+  orderId,
+  errorMessage,
+  model,
+  supabaseClient,
+}) {
+  const supabase = supabaseClient || getSupabaseServiceClient();
   const { data, error } = await supabase.rpc('refund_ai_report_order', {
     p_order_id: orderId,
     p_error_message: errorMessage || 'AI 调用失败，已自动退款',

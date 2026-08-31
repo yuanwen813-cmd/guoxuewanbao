@@ -1,7 +1,6 @@
 import '../../application/dto/interpretation.dart';
 import '../../application/dto/method_recommendation.dart';
 import '../../application/ports/ai_port.dart';
-import 'ai_json_repair.dart';
 import 'ai_response_parser.dart';
 import 'deepseek_client.dart';
 import 'prompt_registry.dart';
@@ -11,7 +10,6 @@ class AiGateway implements AiPort {
   final DeepSeekClient _client;
   final PromptRegistry _promptRegistry;
   final AiResponseParser _parser;
-  final AiJsonRepair _repair;
 
   AiGateway({
     String? apiKey,
@@ -19,8 +17,7 @@ class AiGateway implements AiPort {
     PromptRegistry? promptRegistry,
   })  : _client = DeepSeekClient(apiKey: apiKey, proxyUrl: proxyUrl),
         _promptRegistry = promptRegistry ?? PromptRegistry.instance,
-        _parser = const AiResponseParser(),
-        _repair = AiJsonRepair(apiKey: apiKey ?? '');
+        _parser = const AiResponseParser();
 
   @override
   Future<List<MethodRecommendation>> recommendMethods(String userIntent) async {
@@ -57,7 +54,8 @@ class AiGateway implements AiPort {
       );
 
       final raw = await _client.chat(
-        systemPrompt: '你是国学命理解读专家。只返回 JSON，格式：{"classical":"","vernacular":"","advice":"","tags":[]}',
+        systemPrompt:
+            '你是国学命理解读专家。只返回 JSON，格式：{"classical":"","vernacular":"","advice":"","tags":[]}',
         userPrompt: prompt,
         temperature: 0.8,
         maxTokens: 2048,

@@ -38,6 +38,7 @@ class _MeihuaYiPageState extends ConsumerState<MeihuaYiPage> {
   int _firstNum = 0, _secondNum = 0, _thirdNum = 0;
   MeihuaCastResult? _castResult;
   CommonDivinationResult? _commonResult;
+  // ignore: unused_field
   bool _interpreting = false;
 
   final List<Map<String, dynamic>> _aiAttempts = [];
@@ -232,6 +233,7 @@ class _MeihuaYiPageState extends ConsumerState<MeihuaYiPage> {
                 ]));
   }
 
+  // ignore: unused_element
   Future<void> _aiInterpret() async {
     if (_castResult == null || _commonResult == null) return;
     setState(() => _interpreting = true);

@@ -32,10 +32,13 @@ class AnimationConfig {
   final String type;
   final Duration duration;
 
-  const AnimationConfig._(this.type, {this.duration = const Duration(milliseconds: 1500)});
+  const AnimationConfig._(this.type, this.duration);
 
-  static const coinPhysics = AnimationConfig._('coin');
-  static const palmPulse = AnimationConfig._('palm');
-  static const starField = AnimationConfig._('star');
-  static const inkFlow = AnimationConfig._('ink');
+  static const coinPhysics =
+      AnimationConfig._('coin', Duration(milliseconds: 1500));
+  static const palmPulse =
+      AnimationConfig._('palm', Duration(milliseconds: 1500));
+  static const starField =
+      AnimationConfig._('star', Duration(milliseconds: 1500));
+  static const inkFlow = AnimationConfig._('ink', Duration(milliseconds: 1500));
 }

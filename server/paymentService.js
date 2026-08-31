@@ -9,6 +9,7 @@ const {
 } = require('./walletService');
 const { createWechatPayment, parseWechatNotify } = require('./wechatPay');
 const { createAlipayPayment, parseAlipayNotify } = require('./alipay');
+const { recordServiceEventQuietly } = require('./monitoringService');
 
 const providers = new Set(['wechat', 'alipay']);
 const tradeTypes = new Set([
@@ -73,7 +74,13 @@ async function createRecharge({ userId, provider, tradeType, amountCents }) {
   };
 }
 
-async function handleWechatNotify({ headers, rawBody }) {
+async function handleWechatNotify({ headers, rawBody, dependencies = {} }) {
+  const insertLog = dependencies.insertPaymentNotifyLog || insertPaymentNotifyLog;
+  const parseNotify = dependencies.parseWechatNotify || parseWechatNotify;
+  const markPaid = dependencies.markRechargePaid || markRechargePaid;
+  const markLog = dependencies.markPaymentNotifyLog || markPaymentNotifyLog;
+  const recordMonitoringEvent =
+    dependencies.recordServiceEventQuietly || recordServiceEventQuietly;
   let log;
   try {
     let rawParsed = {};
@@ -82,39 +89,61 @@ async function handleWechatNotify({ headers, rawBody }) {
     } catch (_) {
       rawParsed = { parseError: true };
     }
-    log = await insertPaymentNotifyLog({
+    log = await insertLog({
       provider: 'wechat',
       headersJson: headers,
       rawBody,
       parsedJson: rawParsed,
     });
-    const parsed = parseWechatNotify(headers, rawBody);
-    const result = await markRechargePaid({
+    const parsed = parseNotify(headers, rawBody);
+    const result = await markPaid({
       outTradeNo: parsed.outTradeNo,
       providerTradeNo: parsed.providerTradeNo,
       amountCents: parsed.amountCents,
       notifyLogId: log.id,
       rawPayload: parsed.decrypted,
     });
-    await markPaymentNotifyLog(log.id, { verified: true, handled: true });
+    await markLog(log.id, { verified: true, handled: true });
+    if (result.alreadyPaid) {
+      recordMonitoringEvent({
+        category: 'payment',
+        eventType: 'payment_duplicate_notify',
+        severity: 'warning',
+        message: '微信支付重复回调已按幂等规则处理',
+        context: { provider: 'wechat', outTradeNo: parsed.outTradeNo },
+      });
+    }
     return result;
   } catch (error) {
     if (log?.id) {
-      await markPaymentNotifyLog(log.id, {
+      await markLog(log.id, {
         verified: false,
         handled: false,
         errorMessage: error.message,
       });
     }
+    recordMonitoringEvent({
+      category: 'payment',
+      eventType: 'payment_notify_failed',
+      severity: 'error',
+      message: '微信支付回调校验或入账失败',
+      context: { provider: 'wechat', statusCode: error.statusCode || 500 },
+    });
     throw error;
   }
 }
 
-async function handleAlipayNotify({ headers, rawBody }) {
+async function handleAlipayNotify({ headers, rawBody, dependencies = {} }) {
+  const insertLog = dependencies.insertPaymentNotifyLog || insertPaymentNotifyLog;
+  const parseNotify = dependencies.parseAlipayNotify || parseAlipayNotify;
+  const markPaid = dependencies.markRechargePaid || markRechargePaid;
+  const markLog = dependencies.markPaymentNotifyLog || markPaymentNotifyLog;
+  const recordMonitoringEvent =
+    dependencies.recordServiceEventQuietly || recordServiceEventQuietly;
   let log;
   try {
     const parsed = Object.fromEntries(new URLSearchParams(rawBody || '').entries());
-    log = await insertPaymentNotifyLog({
+    log = await insertLog({
       provider: 'alipay',
       headersJson: headers,
       rawBody,
@@ -122,24 +151,40 @@ async function handleAlipayNotify({ headers, rawBody }) {
       outTradeNo: parsed.out_trade_no,
       providerTradeNo: parsed.trade_no,
     });
-    const verified = parseAlipayNotify(rawBody);
-    const result = await markRechargePaid({
+    const verified = parseNotify(rawBody);
+    const result = await markPaid({
       outTradeNo: verified.outTradeNo,
       providerTradeNo: verified.providerTradeNo,
       amountCents: verified.amountCents,
       notifyLogId: log.id,
       rawPayload: verified.parsed,
     });
-    await markPaymentNotifyLog(log.id, { verified: true, handled: true });
+    await markLog(log.id, { verified: true, handled: true });
+    if (result.alreadyPaid) {
+      recordMonitoringEvent({
+        category: 'payment',
+        eventType: 'payment_duplicate_notify',
+        severity: 'warning',
+        message: '支付宝重复回调已按幂等规则处理',
+        context: { provider: 'alipay', outTradeNo: verified.outTradeNo },
+      });
+    }
     return result;
   } catch (error) {
     if (log?.id) {
-      await markPaymentNotifyLog(log.id, {
+      await markLog(log.id, {
         verified: false,
         handled: false,
         errorMessage: error.message,
       });
     }
+    recordMonitoringEvent({
+      category: 'payment',
+      eventType: 'payment_notify_failed',
+      severity: 'error',
+      message: '支付宝支付回调校验或入账失败',
+      context: { provider: 'alipay', statusCode: error.statusCode || 500 },
+    });
     throw error;
   }
 }

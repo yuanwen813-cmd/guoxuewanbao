@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_decoration.dart';
@@ -84,8 +83,9 @@ class _RecommendPageState extends ConsumerState<RecommendPage> {
                         color: Colors.white,
                       ),
                     )
-                  : Text('开始推荐', style: GuoXueTypography.bodyLarge.copyWith(
-                      color: GuoXueColors.ricePaper)),
+                  : Text('开始推荐',
+                      style: GuoXueTypography.bodyLarge
+                          .copyWith(color: GuoXueColors.ricePaper)),
             ),
           ],
         ),

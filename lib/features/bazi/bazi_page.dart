@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_decoration.dart';
 import '../../app/theme/guoxue_typography.dart';
-import '../../domain/bazi/bazi_chart.dart';
 import '../../domain/bazi/bazi_engine.dart';
 import '../../domain/bazi/bazi_input.dart';
 import '../../shared/widgets/classical_card.dart';
@@ -40,7 +39,20 @@ class _BaziPageState extends ConsumerState<BaziPage> {
     super.dispose();
   }
 
-  static const _branches = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+  static const _branches = [
+    '子',
+    '丑',
+    '寅',
+    '卯',
+    '辰',
+    '巳',
+    '午',
+    '未',
+    '申',
+    '酉',
+    '戌',
+    '亥'
+  ];
 
   void _calculate() {
     final input = BaziInput(
@@ -119,22 +131,21 @@ class _BaziPageState extends ConsumerState<BaziPage> {
           ClassicalCard(
             child: Column(
               children: [
-                _buildDropdown('出生年份', _year,
+                _buildDropdown(
+                    '出生年份',
+                    _year,
                     List.generate(151, (i) => 1950 + i),
                     (v) => setState(() => _year = v!)),
                 const SizedBox(height: 12),
-                _buildDropdown('出生月份', _month,
-                    List.generate(12, (i) => i + 1),
+                _buildDropdown('出生月份', _month, List.generate(12, (i) => i + 1),
                     (v) => setState(() => _month = v!),
                     displayFn: (m) => '$m月'),
                 const SizedBox(height: 12),
-                _buildDropdown('出生日', _day,
-                    List.generate(31, (i) => i + 1),
+                _buildDropdown('出生日', _day, List.generate(31, (i) => i + 1),
                     (v) => setState(() => _day = v!),
                     displayFn: (d) => '$d日'),
                 const SizedBox(height: 12),
-                _buildDropdown('出生时辰', _hour,
-                    List.generate(24, (i) => i),
+                _buildDropdown('出生时辰', _hour, List.generate(24, (i) => i),
                     (v) => setState(() => _hour = v!),
                     displayFn: (h) => '$h 时 (${_branches[h ~/ 2 % 12]}时)'),
                 const SizedBox(height: 12),
@@ -157,7 +168,6 @@ class _BaziPageState extends ConsumerState<BaziPage> {
             ),
           ),
           const SizedBox(height: 20),
-
           ClassicalCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -200,11 +210,10 @@ class _BaziPageState extends ConsumerState<BaziPage> {
             decoration: GuoXueDecoration.classicalBlock,
             child: Column(
               children: [
-                const Icon(Icons.calendar_month, size: 48,
-                    color: GuoXueColors.primary),
+                const Icon(Icons.calendar_month,
+                    size: 48, color: GuoXueColors.primary),
                 const SizedBox(height: 12),
-                Text(_standardResults['日柱'] ?? '',
-                    style: GuoXueTypography.h1),
+                Text(_standardResults['日柱'] ?? '', style: GuoXueTypography.h1),
                 const SizedBox(height: 4),
                 Text(
                     '日主：${_standardResults['日主'] ?? ''}    ${_standardResults['出生'] ?? ''}',

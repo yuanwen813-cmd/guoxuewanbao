@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../domain/common/common_result_models.dart';
-import '../../domain/history/divination_history.dart';
 import '../../features/result_common/common_divination_result_page.dart';
 import '../../infrastructure/history_service/history_service.dart';
 

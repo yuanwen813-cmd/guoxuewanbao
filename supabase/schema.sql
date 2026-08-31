@@ -126,6 +126,20 @@ create table if not exists ai_call_logs (
   created_at timestamptz not null default now()
 );
 
+-- Operational events are deliberately limited to service-side, redacted
+-- metadata. Do not store request bodies, SMS codes, prompts, payment payloads,
+-- phone numbers, or credentials in this table.
+create table if not exists service_event_logs (
+  id uuid primary key default gen_random_uuid(),
+  category text not null,
+  event_type text not null,
+  severity text not null default 'error' check (severity in ('info', 'warning', 'error')),
+  message text not null,
+  user_id uuid references app_users(id) on delete set null,
+  context_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists admin_users (
   id uuid primary key default gen_random_uuid(),
   phone text unique not null,
@@ -209,6 +223,10 @@ create index if not exists idx_recharge_orders_user_time
 
 create index if not exists idx_ai_report_orders_user_time
   on ai_report_orders(user_id, created_at desc);
+create index if not exists idx_service_event_logs_time
+  on service_event_logs(created_at desc);
+create index if not exists idx_service_event_logs_severity_time
+  on service_event_logs(severity, created_at desc);
 
 create index if not exists idx_sms_login_codes_phone_time
   on sms_login_codes(phone, created_at desc);
@@ -1113,6 +1131,7 @@ alter table recharge_orders enable row level security;
 alter table ai_report_orders enable row level security;
 alter table payment_notify_logs enable row level security;
 alter table ai_call_logs enable row level security;
+alter table service_event_logs enable row level security;
 alter table admin_users enable row level security;
 alter table admin_audit_logs enable row level security;
 alter table user_history_records enable row level security;
@@ -1129,6 +1148,7 @@ revoke all on table recharge_orders from public, anon, authenticated;
 revoke all on table ai_report_orders from public, anon, authenticated;
 revoke all on table payment_notify_logs from public, anon, authenticated;
 revoke all on table ai_call_logs from public, anon, authenticated;
+revoke all on table service_event_logs from public, anon, authenticated;
 revoke all on table admin_users from public, anon, authenticated;
 revoke all on table admin_audit_logs from public, anon, authenticated;
 revoke all on table user_history_records from public, anon, authenticated;
@@ -1157,6 +1177,7 @@ grant all on table recharge_orders to service_role;
 grant all on table ai_report_orders to service_role;
 grant all on table payment_notify_logs to service_role;
 grant all on table ai_call_logs to service_role;
+grant all on table service_event_logs to service_role;
 grant all on table admin_users to service_role;
 grant all on table admin_audit_logs to service_role;
 grant all on table user_history_records to service_role;

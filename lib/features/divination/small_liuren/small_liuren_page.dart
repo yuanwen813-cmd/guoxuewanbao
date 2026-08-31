@@ -33,6 +33,7 @@ class _SmallLiurenPageState extends ConsumerState<SmallLiurenPage> {
 
   SmallLiurenResult? _castResult;
   CommonDivinationResult? _commonResult;
+  // ignore: unused_field
   bool _interpreting = false;
   final List<Map<String, dynamic>> _aiAttempts = [];
   Map<String, dynamic>? _finalResult;
@@ -142,6 +143,7 @@ class _SmallLiurenPageState extends ConsumerState<SmallLiurenPage> {
     ref.read(historyServiceProvider).save(record);
   }
 
+  // ignore: unused_element
   Future<void> _aiInterpret() async {
     if (_castResult == null || _commonResult == null) return;
     setState(() => _interpreting = true);

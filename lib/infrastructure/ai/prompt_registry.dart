@@ -1,5 +1,4 @@
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:yaml/yaml.dart';
 
 /// Prompt 注册中心 —— 从 assets/prompts/ 加载 YAML 模板
 class PromptRegistry {
@@ -21,7 +20,8 @@ class PromptRegistry {
 
     for (final name in manifests) {
       try {
-        final yamlStr = await rootBundle.loadString('assets/prompts/$name.yaml');
+        final yamlStr =
+            await rootBundle.loadString('assets/prompts/$name.yaml');
         _cache[name] = yamlStr;
       } catch (_) {
         // 模板文件可能尚未添加，静默跳过
@@ -47,9 +47,8 @@ class PromptRegistry {
     final template = _cache[templateName] ?? '';
     final safetyRules = _cache['safety_rules'] ?? '';
 
-    final resultStr = resultData.entries
-        .map((e) => '${e.key}: ${e.value}')
-        .join('\n');
+    final resultStr =
+        resultData.entries.map((e) => '${e.key}: ${e.value}').join('\n');
 
     return '''
 $safetyRules

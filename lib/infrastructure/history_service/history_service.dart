@@ -230,6 +230,34 @@ class HistoryService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 删除当前用户的历史记录，并同步删除云端副本。
+  ///
+  /// 钱包、充值订单、AI 报告和命盘档案不属于历史记录，因此不会受影响。
+  /// 云端暂时不可用时，待删除编号会留在本机，下一次同步时继续删除。
+  Future<bool> clearAllHistory() async {
+    final ids = _records.map((record) => record.id).toList();
+    _records.clear();
+    _pendingDeletedIds.addAll(ids);
+    await _persist();
+    await _persistPendingDeletes();
+    notifyListeners();
+
+    final token = _token;
+    final api = _cloudApi;
+    if (ids.isEmpty || token == null || token.isEmpty || api == null) {
+      return true;
+    }
+
+    try {
+      await api.sync(token, deletedHistoryIds: ids);
+      _pendingDeletedIds.removeAll(ids);
+      await _persistPendingDeletes();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   bool _matchesResult(
     DivinationHistory record,
     CommonDivinationResult result,

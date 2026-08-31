@@ -8,8 +8,6 @@ import 'guoxue_colors.dart';
 class GuoXueTypography {
   GuoXueTypography._();
 
-  static const String _serifFallback = 'serif';
-
   static const _baseStyle = TextStyle(
     color: GuoXueColors.inkBlack,
     letterSpacing: 0.5,

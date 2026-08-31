@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:guoxueapp/domain/history/divination_history.dart';
 import 'package:guoxueapp/features/account/user_data_api.dart';

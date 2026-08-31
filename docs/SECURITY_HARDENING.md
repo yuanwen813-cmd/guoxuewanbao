@@ -4,7 +4,7 @@
 
 ## 必须执行的线上步骤
 
-1. 在 Supabase SQL Editor 执行 `supabase/schema.sql`。
+1. 新环境在 Supabase SQL Editor 执行 `supabase/schema.sql`；已有环境额外执行 `supabase/migrations/20260831_service_event_logs.sql`。
 2. 确认业务表已开启 RLS，且 `anon` / `authenticated` / `public` 不再具备业务表读写权限。
 3. Vercel Production 环境变量设置：
    - `NODE_ENV=production`
@@ -28,6 +28,7 @@
 - 短信发送增加手机号、IP、全站分钟级频控，并记录失败发送尝试。
 - 支付回调增加 IP 频控和请求体大小限制，日志内容会截断。
 - AI 解析增加 prompt 和快照大小限制，避免超长输入消耗。
+- 支付重复回调、支付回调失败和 AI 自动退款会写入 `service_event_logs`，用于后台运行监控；日志会主动排除手机号、验证码、密钥、支付原文、提示词和请求体。
 
 ## 复测清单
 
@@ -37,3 +38,4 @@
 - 短信同手机号、同 IP 高频发送应返回 429。
 - 伪造支付宝/微信回调不得入账。
 - 正常登录、钱包余额、支付宝充值、AI 扣费与失败退款流程仍可用。
+- 管理后台“运行监控”可查看脱敏后的支付与 AI 异常事件；执行迁移前该页会提示需要先执行迁移，不影响支付和退款主流程。

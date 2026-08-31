@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme/guoxue_typography.dart';
+import '../../infrastructure/history_service/history_service.dart';
 import '../../shared/widgets/classical_card.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
       body: ListView(
@@ -40,15 +42,15 @@ class SettingsPage extends StatelessWidget {
                 const Divider(),
                 _SettingsItem(
                   icon: Icons.delete_outline,
-                  title: '清除数据',
-                  subtitle: '清除本设备上的历史记录和缓存',
+                  title: '清除历史记录',
+                  subtitle: '删除历史记录，不影响钱包、报告和命盘档案',
                   onTap: () {
                     showDialog(
                       context: context,
                       builder: (ctx) => AlertDialog(
                         title: const Text('确认清除'),
                         content: const Text(
-                          '将清除本设备上的历史记录和缓存数据，此操作不可撤销。',
+                          '将删除当前账户的历史记录及本机副本。钱包余额、充值订单、已生成 AI 报告和命盘档案不受影响，此操作不可撤销。',
                         ),
                         actions: [
                           TextButton(
@@ -56,13 +58,23 @@ class SettingsPage extends StatelessWidget {
                             child: const Text('取消'),
                           ),
                           TextButton(
-                            onPressed: () {
+                            onPressed: () async {
                               Navigator.pop(ctx);
+                              final cloudSynced = await ref
+                                  .read(historyServiceProvider)
+                                  .clearAllHistory();
+                              if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('数据已清除')),
+                                SnackBar(
+                                  content: Text(
+                                    cloudSynced
+                                        ? '历史记录已清除'
+                                        : '本机记录已清除，云端将在网络恢复后同步删除',
+                                  ),
+                                ),
                               );
                             },
-                            child: const Text('确认清除'),
+                            child: const Text('确认删除'),
                           ),
                         ],
                       ),

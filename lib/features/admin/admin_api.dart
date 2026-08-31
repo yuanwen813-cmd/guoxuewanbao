@@ -176,6 +176,27 @@ class AdminApi {
     );
   }
 
+  Future<Map<String, dynamic>> serviceEvents(
+    String token, {
+    String? severity,
+    String? category,
+    int page = 1,
+    int pageSize = 30,
+  }) {
+    return get(
+      '/api/admin-service-events',
+      token: token,
+      query: {
+        if (severity != null && severity.trim().isNotEmpty)
+          'severity': severity.trim(),
+        if (category != null && category.trim().isNotEmpty)
+          'category': category.trim(),
+        'page': page,
+        'pageSize': pageSize,
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> adjustWallet(
     String token, {
     required String userId,

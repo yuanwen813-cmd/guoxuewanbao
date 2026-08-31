@@ -6,6 +6,7 @@ const {
   getUserDetail,
   listAiReportOrders,
   listAuditLogs,
+  listServiceEvents,
   listRechargeOrders,
   listUsers,
   listWalletTransactions: listAdminWalletTransactions,
@@ -474,6 +475,18 @@ const routes = {
     const result = await listAuditLogs({
       action: url.searchParams.get('action'),
       targetType: url.searchParams.get('targetType'),
+      page: url.searchParams.get('page'),
+      pageSize: url.searchParams.get('pageSize'),
+    });
+    sendJson(res, 200, { ok: true, ...result });
+  }),
+
+  'admin-service-events': handleApi(['GET'], async (req, res) => {
+    await requireAdmin(req, 'audit:read');
+    const url = parseUrl(req);
+    const result = await listServiceEvents({
+      severity: url.searchParams.get('severity'),
+      category: url.searchParams.get('category'),
       page: url.searchParams.get('page'),
       pageSize: url.searchParams.get('pageSize'),
     });

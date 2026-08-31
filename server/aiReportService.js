@@ -8,6 +8,7 @@ const {
   refundAiReport,
 } = require('./walletService');
 const { buildAiReportSystemPrompt } = require('./promptLoader');
+const { recordServiceEventQuietly } = require('./monitoringService');
 
 const DEEPSEEK_BASE_URL =
   process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
@@ -92,8 +93,16 @@ async function callDeepSeek({ product, systemPrompt, userPrompt, temperature }) 
   };
 }
 
-async function generateAiReport({ userId, body }) {
-  const product = getAiProduct(body.productId);
+async function generateAiReport({ userId, body, dependencies = {} }) {
+  const productResolver = dependencies.getAiProduct || getAiProduct;
+  const promptBuilder = dependencies.buildAiReportSystemPrompt || buildAiReportSystemPrompt;
+  const debitReport = dependencies.createAiReportDebit || createAiReportDebit;
+  const completeReport = dependencies.completeAiReport || completeAiReport;
+  const refundReport = dependencies.refundAiReport || refundAiReport;
+  const requestAi = dependencies.callDeepSeek || callDeepSeek;
+  const recordMonitoringEvent =
+    dependencies.recordServiceEventQuietly || recordServiceEventQuietly;
+  const product = productResolver(body.productId);
   if (!product) throw new HttpError(400, 'AI 解析档位不存在或已下架');
   if (!product.enabled) {
     throw new HttpError(400, product.disabledReason || '该 AI 解析档位暂未开放');
@@ -110,7 +119,7 @@ async function generateAiReport({ userId, body }) {
   );
   const systemPrompt = assertTextLimit(
     '系统提示词',
-    buildAiReportSystemPrompt(clientSystemPrompt),
+    promptBuilder(clientSystemPrompt),
     maxSystemPromptChars(),
   );
   const userPrompt = assertTextLimit('解析问题', body.userPrompt, maxPromptChars());
@@ -132,7 +141,7 @@ async function generateAiReport({ userId, body }) {
 
   const promptSnapshot = [title, systemPrompt, userPrompt].join('\n\n');
 
-  const debit = await createAiReportDebit({
+  const debit = await debitReport({
     userId,
     product,
     inputSnapshotJson,
@@ -142,13 +151,13 @@ async function generateAiReport({ userId, body }) {
   });
 
   try {
-    const ai = await callDeepSeek({
+    const ai = await requestAi({
       product,
       systemPrompt,
       userPrompt,
       temperature: body.temperature,
     });
-    const completed = await completeAiReport({
+    const completed = await completeReport({
       orderId: debit.order.id,
       resultText: ai.answer,
       model: ai.model,
@@ -161,10 +170,22 @@ async function generateAiReport({ userId, body }) {
       wallet: completed.wallet,
     };
   } catch (error) {
-    const refunded = await refundAiReport({
+    const refunded = await refundReport({
       orderId: debit.order.id,
       errorMessage: error.message || 'AI 调用失败，已自动退款',
       model: product.model,
+    });
+    recordMonitoringEvent({
+      category: 'ai',
+      eventType: 'ai_report_refunded',
+      severity: 'error',
+      message: 'AI 解析失败，扣费已自动退款',
+      userId,
+      context: {
+        productId: product.id,
+        orderId: debit.order.id,
+        statusCode: error.statusCode || 500,
+      },
     });
     const statusCode = error.statusCode && error.statusCode < 500
       ? error.statusCode

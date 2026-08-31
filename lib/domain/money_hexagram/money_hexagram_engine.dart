@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import '../hexagram/hexagram.dart';
-import '../hexagram/yao.dart';
 import 'coin_throw.dart';
 import 'money_hexagram_input.dart';
 import 'money_hexagram_result.dart';

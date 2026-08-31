@@ -36,6 +36,8 @@ class _AdminPageState extends State<AdminPage> {
   List<dynamic> _recharges = const [];
   List<dynamic> _aiReports = const [];
   List<dynamic> _audits = const [];
+  List<dynamic> _serviceEvents = const [];
+  bool _monitoringAvailable = true;
 
   @override
   void initState() {
@@ -237,6 +239,12 @@ class _AdminPageState extends State<AdminPage> {
                 label: '审计日志',
                 onTap: () => _switchTab('audit'),
               ),
+              _NavButton(
+                selected: _tab == 'monitoring',
+                icon: Icons.monitor_heart_outlined,
+                label: '运行监控',
+                onTap: () => _switchTab('monitoring'),
+              ),
             ],
           ),
         ),
@@ -254,6 +262,7 @@ class _AdminPageState extends State<AdminPage> {
                 'ai' => _buildAiReports(),
                 'adjust' => _buildAdjust(),
                 'audit' => _buildAudits(),
+                'monitoring' => _buildMonitoring(),
                 _ => _buildDashboard(),
               },
             ],
@@ -643,6 +652,69 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
+  Widget _buildMonitoring() {
+    if (!_monitoringAvailable) {
+      return const _Panel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('运行监控尚未启用',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+            SizedBox(height: 8),
+            Text(
+              '请在 Supabase SQL Editor 执行 '
+              'supabase/migrations/20260831_service_event_logs.sql，'
+              '完成后重新刷新本页。执行前不影响支付、扣费或退款。',
+              style: TextStyle(color: Colors.black54),
+            ),
+          ],
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeader(
+          title: '运行监控',
+          actionLabel: '刷新',
+          onAction: _loadServiceEvents,
+        ),
+        const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: Text(
+            '仅记录脱敏运行事件，不保存手机号、验证码、支付回调原文、提示词或密钥。',
+            style: TextStyle(color: Colors.black54),
+          ),
+        ),
+        _DataPanel(
+          empty: _serviceEvents.isEmpty,
+          emptyText: '暂无需要关注的运行事件',
+          child: DataTable(
+            columns: const [
+              DataColumn(label: Text('级别')),
+              DataColumn(label: Text('类别')),
+              DataColumn(label: Text('事件')),
+              DataColumn(label: Text('说明')),
+              DataColumn(label: Text('时间')),
+            ],
+            rows: [
+              for (final item in _serviceEvents)
+                DataRow(
+                  cells: [
+                    DataCell(Text(_serviceSeverity(_text(item, 'severity')))),
+                    DataCell(Text(_text(item, 'category'))),
+                    DataCell(Text(_text(item, 'eventType'))),
+                    DataCell(Text(_text(item, 'message'))),
+                    DataCell(Text(_shortTime(_text(item, 'createdAt')))),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _sendCode() async {
     await _run(() async {
       await _api.sendCode(_phoneController.text.trim());
@@ -691,6 +763,8 @@ class _AdminPageState extends State<AdminPage> {
         await _loadAiReports();
       case 'audit':
         await _loadAudits();
+      case 'monitoring':
+        await _loadServiceEvents();
       case 'adjust':
         setState(() {
           _message = null;
@@ -747,6 +821,15 @@ class _AdminPageState extends State<AdminPage> {
       final data = await _api.auditLogs(_token!);
       _audits = data['items'] as List<dynamic>? ?? const [];
       _message = '审计日志已刷新';
+    });
+  }
+
+  Future<void> _loadServiceEvents() async {
+    await _run(() async {
+      final data = await _api.serviceEvents(_token!);
+      _monitoringAvailable = data['monitoringAvailable'] as bool? ?? true;
+      _serviceEvents = data['items'] as List<dynamic>? ?? const [];
+      _message = _monitoringAvailable ? '运行监控已刷新' : null;
     });
   }
 
@@ -1146,5 +1229,14 @@ String _aiStatus(String status) {
     'refunded' => '已退款',
     'pending' => '待处理',
     _ => status,
+  };
+}
+
+String _serviceSeverity(String severity) {
+  return switch (severity) {
+    'error' => '异常',
+    'warning' => '提醒',
+    'info' => '信息',
+    _ => severity,
   };
 }

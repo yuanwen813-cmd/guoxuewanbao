@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:sqflite/sqflite.dart';
+
 import '../../application/dto/divination_record.dart';
 import '../../application/ports/history_repository.dart';
 import '../database/app_database.dart';

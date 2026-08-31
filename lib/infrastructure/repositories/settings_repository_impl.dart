@@ -1,3 +1,5 @@
+import 'package:sqflite/sqflite.dart';
+
 import '../../application/ports/settings_repository.dart';
 import '../database/app_database.dart';
 

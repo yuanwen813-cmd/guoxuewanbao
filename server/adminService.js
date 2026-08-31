@@ -117,6 +117,13 @@ function isMissingAuditTable(error) {
   return error?.code === '42P01' || error?.code === 'PGRST205' || message.includes('admin_audit_logs');
 }
 
+function isMissingMonitoringTable(error) {
+  const message = String(error?.message || '');
+  return error?.code === '42P01' ||
+    error?.code === 'PGRST205' ||
+    message.includes('service_event_logs');
+}
+
 function mapAdmin(row, fallbackPhone) {
   if (!row) {
     return {
@@ -236,6 +243,18 @@ function mapAuditLog(row) {
     detailJson: row.detail_json || {},
     clientIp: row.client_ip,
     userAgent: row.user_agent,
+    createdAt: row.created_at,
+  };
+}
+
+function mapServiceEvent(row) {
+  return {
+    id: row.id,
+    category: row.category,
+    eventType: row.event_type,
+    severity: row.severity,
+    message: row.message,
+    context: row.context_json || {},
     createdAt: row.created_at,
   };
 }
@@ -563,6 +582,38 @@ async function listAuditLogs({ action, targetType, page, pageSize }) {
   };
 }
 
+async function listServiceEvents({ severity, category, page, pageSize }) {
+  const supabase = getSupabaseServiceClient();
+  const p = pageParams(page, pageSize);
+  let query = supabase
+    .from('service_event_logs')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(p.from, p.to);
+  if (severity) query = query.eq('severity', severity);
+  if (category) query = query.eq('category', category);
+  const { data, error, count } = await query;
+  if (error) {
+    if (isMissingMonitoringTable(error)) {
+      return {
+        monitoringAvailable: false,
+        items: [],
+        total: 0,
+        page: p.page,
+        pageSize: p.pageSize,
+      };
+    }
+    throw new HttpError(500, 'Admin service event query failed', error.message);
+  }
+  return {
+    monitoringAvailable: true,
+    items: (data || []).map(mapServiceEvent),
+    total: Number(count || 0),
+    page: p.page,
+    pageSize: p.pageSize,
+  };
+}
+
 async function getAdminDashboard() {
   const supabase = getSupabaseServiceClient();
   const { data, error } = await supabase.rpc('admin_dashboard_summary');
@@ -576,6 +627,7 @@ module.exports = {
   getAiReportDetailForAdmin,
   listAiReportOrders,
   listAuditLogs,
+  listServiceEvents,
   listRechargeOrders,
   listUsers,
   listWalletTransactions,

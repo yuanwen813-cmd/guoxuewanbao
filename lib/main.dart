@@ -26,10 +26,8 @@ void main() async {
     // Web 平台存储不可用，用户需在设置页手动输入 Key
   }
 
-  runApp(
-    ProviderScope(
-      parent: container,
-      child: const GuoXueApp(),
-    ),
-  );
+  runApp(UncontrolledProviderScope(
+    container: container,
+    child: const GuoXueApp(),
+  ));
 }

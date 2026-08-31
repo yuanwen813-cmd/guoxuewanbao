@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/guoxue_colors.dart';
-import '../../app/theme/guoxue_decoration.dart';
 import '../../app/theme/guoxue_typography.dart';
 import '../../domain/unified/unified_models.dart';
 import '../../shared/disclaimer/disclaimer_block.dart';
@@ -38,7 +36,8 @@ class GuoxueResultPage extends StatelessWidget {
           if (onShare != null)
             IconButton(icon: const Icon(Icons.share), onPressed: onShare),
           if (onSave != null)
-            IconButton(icon: const Icon(Icons.bookmark_outline), onPressed: onSave),
+            IconButton(
+                icon: const Icon(Icons.bookmark_outline), onPressed: onSave),
         ],
       ),
       body: SingleChildScrollView(
@@ -53,10 +52,12 @@ class GuoxueResultPage extends StatelessWidget {
                 child: ClassicalCard(
                   child: Row(
                     children: [
-                      const Icon(Icons.help_outline, color: GuoXueColors.gold, size: 20),
+                      const Icon(Icons.help_outline,
+                          color: GuoXueColors.gold, size: 20),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text('所问：$userQuestion', style: GuoXueTypography.body),
+                        child: Text('所问：$userQuestion',
+                            style: GuoXueTypography.body),
                       ),
                     ],
                   ),
@@ -73,7 +74,8 @@ class GuoxueResultPage extends StatelessWidget {
             ],
 
             // 操作按钮
-            if (result.aiInterpretation == null || result.aiInterpretation!.isFallback)
+            if (result.aiInterpretation == null ||
+                result.aiInterpretation!.isFallback)
               if (onAIInterpret != null) ...[
                 const SizedBox(height: 12),
                 GuoXueButton(
@@ -83,7 +85,8 @@ class GuoxueResultPage extends StatelessWidget {
                 ),
               ],
 
-            if (onAIInterpret == null && result.aiInterpretation?.isFallback == true) ...[
+            if (onAIInterpret == null &&
+                result.aiInterpretation?.isFallback == true) ...[
               const SizedBox(height: 12),
               GuoXueButton(
                 label: '重试 AI 解读',
@@ -116,22 +119,28 @@ class GuoxueResultPage extends StatelessWidget {
                     if (section.icon != null)
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
-                        child: Icon(_resolveIcon(section.icon!), color: GuoXueColors.primary, size: 20),
+                        child: Icon(_resolveIcon(section.icon!),
+                            color: GuoXueColors.primary, size: 20),
                       ),
                     Text(section.title, style: GuoXueTypography.h3),
                   ],
                 ),
               ),
             switch (section.type) {
-              ResultSectionType.text => Text(section.text ?? '', style: GuoXueTypography.body),
+              ResultSectionType.text =>
+                Text(section.text ?? '', style: GuoXueTypography.body),
               ResultSectionType.kvTable => _buildKvTable(section.kvPairs ?? []),
               ResultSectionType.tags => Wrap(
-                  spacing: 8, runSpacing: 4,
-                  children: (section.tags ?? []).map((t) => Chip(
-                    label: Text(t, style: GuoXueTypography.caption),
-                    backgroundColor: GuoXueColors.primary.withOpacity(0.08),
-                    side: BorderSide.none,
-                  )).toList(),
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: (section.tags ?? [])
+                      .map((t) => Chip(
+                            label: Text(t, style: GuoXueTypography.caption),
+                            backgroundColor:
+                                GuoXueColors.primary.withOpacity(0.08),
+                            side: BorderSide.none,
+                          ))
+                      .toList(),
                 ),
               ResultSectionType.table => _buildTable(section.table ?? []),
             },
@@ -143,19 +152,22 @@ class GuoxueResultPage extends StatelessWidget {
 
   Widget _buildKvTable(List<MapEntry<String, String>> pairs) {
     return Column(
-      children: pairs.map((e) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 64,
-              child: Text('${e.key}：', style: GuoXueTypography.caption),
-            ),
-            Expanded(child: Text(e.value, style: GuoXueTypography.body)),
-          ],
-        ),
-      )).toList(),
+      children: pairs
+          .map((e) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 64,
+                      child: Text('${e.key}：', style: GuoXueTypography.caption),
+                    ),
+                    Expanded(
+                        child: Text(e.value, style: GuoXueTypography.body)),
+                  ],
+                ),
+              ))
+          .toList(),
     );
   }
 
@@ -164,10 +176,19 @@ class GuoxueResultPage extends StatelessWidget {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
-        columns: table.first.map((h) => DataColumn(label: Text(h, style: GuoXueTypography.caption))).toList(),
-        rows: table.skip(1).map((row) => DataRow(
-          cells: row.map((cell) => DataCell(Text(cell, style: GuoXueTypography.body))).toList(),
-        )).toList(),
+        columns: table.first
+            .map((h) =>
+                DataColumn(label: Text(h, style: GuoXueTypography.caption)))
+            .toList(),
+        rows: table
+            .skip(1)
+            .map((row) => DataRow(
+                  cells: row
+                      .map((cell) =>
+                          DataCell(Text(cell, style: GuoXueTypography.body)))
+                      .toList(),
+                ))
+            .toList(),
       ),
     );
   }
@@ -185,7 +206,8 @@ class GuoxueResultPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                const Icon(Icons.lightbulb_outline, color: GuoXueColors.gold, size: 20),
+                const Icon(Icons.lightbulb_outline,
+                    color: GuoXueColors.gold, size: 20),
                 const SizedBox(width: 8),
                 Text('三、事项解读与参考建议', style: GuoXueTypography.h3),
               ]),
@@ -196,11 +218,17 @@ class GuoxueResultPage extends StatelessWidget {
         ),
         if (ai.tags.isNotEmpty) ...[
           const SizedBox(height: 8),
-          Wrap(spacing: 8, children: ai.tags.map((t) => Chip(
-            label: Text(t, style: GuoXueTypography.caption.copyWith(color: GuoXueColors.primary)),
-            backgroundColor: GuoXueColors.primary.withOpacity(0.08),
-            side: BorderSide.none,
-          )).toList()),
+          Wrap(
+              spacing: 8,
+              children: ai.tags
+                  .map((t) => Chip(
+                        label: Text(t,
+                            style: GuoXueTypography.caption
+                                .copyWith(color: GuoXueColors.primary)),
+                        backgroundColor: GuoXueColors.primary.withOpacity(0.08),
+                        side: BorderSide.none,
+                      ))
+                  .toList()),
         ],
       ],
     );

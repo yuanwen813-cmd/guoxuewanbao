@@ -3,11 +3,8 @@ import 'package:dio/dio.dart';
 /// JSON 修复器 —— 当 AI 返回非法 JSON 时尝试修复
 class AiJsonRepair {
   final Dio _dio;
-  final String _apiKey;
-
   AiJsonRepair({required String apiKey, String? baseUrl})
-      : _apiKey = apiKey,
-        _dio = Dio(BaseOptions(
+      : _dio = Dio(BaseOptions(
           baseUrl: baseUrl ?? 'https://api.deepseek.com',
           connectTimeout: const Duration(seconds: 15),
           receiveTimeout: const Duration(seconds: 30),

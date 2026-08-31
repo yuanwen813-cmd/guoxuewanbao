@@ -10,7 +10,6 @@ import '../../features/result_new/guoxue_result_page.dart';
 import '../../shared/input_fields/dynamic_input_form.dart';
 import '../../shared/widgets/classical_card.dart';
 import '../../shared/widgets/guoxue_button.dart';
-import '../../shared/widgets/yinyang_loader.dart';
 
 /// 通用功能页面 —— 引擎 + 配置 = 完整功能
 ///
@@ -58,7 +57,10 @@ class _GenericFeaturePageState extends State<GenericFeaturePage> {
     Future.delayed(const Duration(milliseconds: 300), () {
       if (!mounted) return;
       final r = widget.calculator(inputs);
-      setState(() { _result = r; _calculating = false; });
+      setState(() {
+        _result = r;
+        _calculating = false;
+      });
     });
   }
 
@@ -68,17 +70,30 @@ class _GenericFeaturePageState extends State<GenericFeaturePage> {
     try {
       final runner = GuoxueFeatureRunner(
         feature: FeatureConfig(
-          id: widget.featureId, title: widget.title, subtitle: '',
-          categoryId: '', route: '', icon: widget.iconName,
-          status: 'beta', complexity: 'simple', ritualType: 'none',
-          engineType: 'local', promptTemplateId: widget.promptTemplateId,
-          requiresBirthInfo: false, requiresQuestion: widget.inputFields.any((f) => f.key == 'question'),
-          supportsHistory: true, supportsShare: true,
+          id: widget.featureId,
+          title: widget.title,
+          subtitle: '',
+          categoryId: '',
+          route: '',
+          icon: widget.iconName,
+          status: 'beta',
+          complexity: 'simple',
+          ritualType: 'none',
+          engineType: 'local',
+          promptTemplateId: widget.promptTemplateId,
+          requiresBirthInfo: false,
+          requiresQuestion: widget.inputFields.any((f) => f.key == 'question'),
+          supportsHistory: true,
+          supportsShare: true,
         ),
         engine: _ResultEngine(_result!),
       );
       final withAI = await runner.run(null, userQuestion: _userQuestion);
-      if (mounted) setState(() { _result = withAI; _interpreting = false; });
+      if (mounted)
+        setState(() {
+          _result = withAI;
+          _interpreting = false;
+        });
     } catch (_) {
       if (mounted) setState(() => _interpreting = false);
     }
@@ -100,7 +115,8 @@ class _GenericFeaturePageState extends State<GenericFeaturePage> {
       );
     }
 
-    final fields = widget.inputFields.where((f) => f.key != 'question').toList();
+    final fields =
+        widget.inputFields.where((f) => f.key != 'question').toList();
     final hasQuestion = widget.inputFields.any((f) => f.key == 'question');
 
     return Scaffold(
@@ -127,7 +143,9 @@ class _GenericFeaturePageState extends State<GenericFeaturePage> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: ClassicalCard(
-                  child: Text(widget.ritualText!, style: GuoXueTypography.body, textAlign: TextAlign.center),
+                  child: Text(widget.ritualText!,
+                      style: GuoXueTypography.body,
+                      textAlign: TextAlign.center),
                 ),
               ),
 
@@ -188,6 +206,8 @@ class _GenericFeaturePageState extends State<GenericFeaturePage> {
 class _ResultEngine extends GuoxueEngine<void, void> {
   final GuoxueResult _r;
   _ResultEngine(this._r);
-  @override String get name => 'result';
-  @override GuoxueResult calculate(void input) => _r;
+  @override
+  String get name => 'result';
+  @override
+  GuoxueResult calculate(void input) => _r;
 }
