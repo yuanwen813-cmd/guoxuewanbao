@@ -45,6 +45,7 @@ class _NatalReadingPageState extends State<NatalReadingPage> {
       subtitle: '先了解结果结构，再填写生辰信息生成八字命理结果。',
       icon: Icons.account_circle_outlined,
       showAppBar: true,
+      backFallbackLocation: '/natal',
       children: [
         const _BaziResultGuide(),
         const SizedBox(height: 12),

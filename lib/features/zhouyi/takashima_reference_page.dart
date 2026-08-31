@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_typography.dart';
 import '../../shared/widgets/classical_card.dart';
+import '../../shared/widgets/app_back_button.dart';
 import 'zhouyi_models.dart';
 import 'zhouyi_repository.dart';
 
@@ -40,8 +41,10 @@ class _TakashimaReferencePageState extends State<TakashimaReferencePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(fallbackLocation: '/classics'),
         title: const Text('高岛易断资料'),
         backgroundColor: const Color(0xFF1A1410),
+        foregroundColor: GuoXueColors.ricePaper,
       ),
       backgroundColor: const Color(0xFF1A1410),
       body: _loading
@@ -189,8 +192,10 @@ class TakashimaReferenceDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(fallbackLocation: '/reference/takashima'),
         title: Text('高岛易断 · ${hexagram.name}'),
         backgroundColor: const Color(0xFF1A1410),
+        foregroundColor: GuoXueColors.ricePaper,
       ),
       backgroundColor: const Color(0xFF1A1410),
       body: SingleChildScrollView(

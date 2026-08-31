@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_typography.dart';
 import 'feature_catalog_v2.dart';
+import '../../shared/widgets/app_back_button.dart';
 
 const _tabRoutes = {'/', '/ask', '/natal', '/mine'};
 
@@ -13,6 +14,7 @@ class V2PageScaffold extends StatelessWidget {
   final IconData icon;
   final List<Widget> children;
   final bool showAppBar;
+  final String backFallbackLocation;
 
   const V2PageScaffold({
     super.key,
@@ -21,13 +23,19 @@ class V2PageScaffold extends StatelessWidget {
     required this.icon,
     required this.children,
     this.showAppBar = false,
+    this.backFallbackLocation = '/',
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F1E7),
-      appBar: showAppBar ? AppBar(title: Text(title)) : null,
+      appBar: showAppBar
+          ? AppBar(
+              leading: AppBackButton(fallbackLocation: backFallbackLocation),
+              title: Text(title),
+            )
+          : null,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),

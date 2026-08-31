@@ -13,6 +13,7 @@ import '../../../infrastructure/history_service/history_service.dart';
 import '../../../shared/disclaimer/disclaimer_block.dart';
 import '../../../shared/widgets/classical_card.dart';
 import '../../../shared/widgets/guoxue_button.dart';
+import '../../../shared/widgets/app_back_button.dart';
 import '../../ask_guidance/ask_question_template_panel.dart';
 
 class SmallLiurenPage extends ConsumerStatefulWidget {
@@ -344,7 +345,10 @@ class _SmallLiurenPageState extends ConsumerState<SmallLiurenPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1410),
       appBar: AppBar(
-          backgroundColor: const Color(0xFF1A1410), title: const Text('小六壬')),
+          leading: const AppBackButton(fallbackLocation: '/ask'),
+          backgroundColor: const Color(0xFF1A1410),
+          foregroundColor: GuoXueColors.ricePaper,
+          title: const Text('小六壬')),
       body: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child:

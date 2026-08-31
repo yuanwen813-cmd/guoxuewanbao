@@ -6,6 +6,7 @@ import '../../app/theme/guoxue_typography.dart';
 import '../../domain/history/divination_history.dart';
 import '../../infrastructure/history_service/history_service.dart';
 import '../../shared/widgets/classical_card.dart';
+import '../../shared/widgets/app_back_button.dart';
 
 class HistoryPage extends ConsumerStatefulWidget {
   const HistoryPage({super.key});
@@ -64,9 +65,11 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1410),
       appBar: AppBar(
+        leading: const AppBackButton(fallbackLocation: '/mine'),
         backgroundColor: const Color(0xFF1A1410),
         title: const Text('历史中心'),
         centerTitle: true,
+        foregroundColor: GuoXueColors.ricePaper,
       ),
       body: Column(children: [
         // 统计区

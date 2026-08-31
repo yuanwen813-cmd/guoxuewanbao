@@ -13,6 +13,7 @@ class ClassicsHomePage extends StatelessWidget {
       subtitle: '查阅周易本经、高岛易断等经典资料。',
       icon: Icons.library_books_outlined,
       showAppBar: true,
+      backFallbackLocation: '/',
       children: [
         V2SectionTitle(title: '经典资料'),
         V2FeatureList(entries: FeatureCatalogV2.classicsFeatures),

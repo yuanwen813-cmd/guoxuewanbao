@@ -17,6 +17,7 @@ import '../../infrastructure/calendar/solar_term_public_feature_flag.dart';
 import '../../infrastructure/calendar/solar_term_trial_engine.dart';
 import '../../shared/disclaimer/disclaimer_block.dart';
 import '../../shared/widgets/classical_card.dart';
+import '../../shared/widgets/app_back_button.dart';
 import 'almanac_display_policy.dart';
 
 class AlmanacPage extends StatefulWidget {
@@ -1066,8 +1067,10 @@ class _AlmanacPageState extends State<AlmanacPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1410),
       appBar: AppBar(
+          leading: const AppBackButton(fallbackLocation: '/'),
           backgroundColor: const Color(0xFF1A1410),
           title: const Text('黄历'),
+          foregroundColor: GuoXueColors.ricePaper,
           actions: [
             IconButton(
                 icon: const Icon(Icons.share, color: Colors.white54),

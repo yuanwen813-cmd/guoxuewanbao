@@ -20,6 +20,7 @@ class NatalProfilesPage extends ConsumerWidget {
       subtitle: '查看和管理已保存的出生资料档案。档案可用于自己、家人、朋友或客户。',
       icon: Icons.badge_outlined,
       showAppBar: true,
+      backFallbackLocation: '/natal/reading',
       children: [
         if (store.hasLegacyProfiles) ...[
           _LegacyProfilesNotice(

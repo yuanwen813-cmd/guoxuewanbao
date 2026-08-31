@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../domain/common/common_result_models.dart';
 import '../../features/result_common/common_divination_result_page.dart';
 import '../../infrastructure/history_service/history_service.dart';
+import '../../shared/widgets/app_back_button.dart';
 
 /// 历史详情页 —— 从保存的快照恢复通用结果页，不重新起卦，不重新请求 AI
 class HistoryDetailPage extends ConsumerWidget {
@@ -19,7 +20,10 @@ class HistoryDetailPage extends ConsumerWidget {
 
     if (record == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('历史详情')),
+        appBar: AppBar(
+          leading: const AppBackButton(fallbackLocation: '/history'),
+          title: const Text('历史详情'),
+        ),
         body: const Center(child: Text('记录不存在或已被删除')),
       );
     }

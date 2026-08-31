@@ -14,6 +14,7 @@ import '../../../infrastructure/history_service/history_service.dart';
 import '../../../shared/disclaimer/disclaimer_block.dart';
 import '../../../shared/widgets/classical_card.dart';
 import '../../../shared/widgets/guoxue_button.dart';
+import '../../../shared/widgets/app_back_button.dart';
 import '../../ask_guidance/ask_question_template_panel.dart';
 
 class CoinHexagramPage extends ConsumerStatefulWidget {
@@ -391,7 +392,10 @@ class _CoinHexagramPageState extends ConsumerState<CoinHexagramPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1410),
       appBar: AppBar(
-          backgroundColor: const Color(0xFF1A1410), title: const Text('金钱卦')),
+          leading: const AppBackButton(fallbackLocation: '/ask'),
+          backgroundColor: const Color(0xFF1A1410),
+          foregroundColor: GuoXueColors.ricePaper,
+          title: const Text('金钱卦')),
       body: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child:

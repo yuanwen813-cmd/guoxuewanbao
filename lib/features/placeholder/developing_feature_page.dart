@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_typography.dart';
+import '../../shared/widgets/app_back_button.dart';
 
 /// 开发中 / 即将开放 统一占位页
 class DevelopingFeaturePage extends StatelessWidget {
@@ -21,8 +22,10 @@ class DevelopingFeaturePage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1410),
       appBar: AppBar(
+        leading: const AppBackButton(fallbackLocation: '/'),
         backgroundColor: const Color(0xFF1A1410),
         title: Text(title),
+        foregroundColor: GuoXueColors.ricePaper,
       ),
       body: Center(
         child: Padding(
@@ -50,7 +53,8 @@ class DevelopingFeaturePage extends StatelessWidget {
                 Text(
                   description!,
                   textAlign: TextAlign.center,
-                  style: GuoXueTypography.caption.copyWith(color: Colors.white38),
+                  style:
+                      GuoXueTypography.caption.copyWith(color: Colors.white38),
                 ),
               ],
               const SizedBox(height: 32),
@@ -59,7 +63,8 @@ class DevelopingFeaturePage extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: GuoXueColors.gold.withOpacity(0.3)),
                 ),
-                child: Text('返回', style: TextStyle(color: GuoXueColors.goldLight)),
+                child:
+                    Text('返回', style: TextStyle(color: GuoXueColors.goldLight)),
               ),
             ],
           ),

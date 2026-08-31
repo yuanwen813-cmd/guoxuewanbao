@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_typography.dart';
 import '../../shared/widgets/classical_card.dart';
+import '../../shared/widgets/app_back_button.dart';
 import 'zhouyi_models.dart';
 import 'zhouyi_repository.dart';
 import 'zhouyi_detail_page.dart';
@@ -41,8 +42,10 @@ class _ZhouyiPageState extends State<ZhouyiPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(fallbackLocation: '/classics'),
         title: const Text('周易本经'),
         backgroundColor: const Color(0xFF1A1410),
+        foregroundColor: GuoXueColors.ricePaper,
       ),
       backgroundColor: const Color(0xFF1A1410),
       body: _loading

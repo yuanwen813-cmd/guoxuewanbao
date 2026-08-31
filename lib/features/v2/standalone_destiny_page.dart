@@ -85,6 +85,7 @@ class _StandaloneDestinyPageState extends ConsumerState<StandaloneDestinyPage> {
       subtitle: widget.type.subtitle,
       icon: widget.type.icon,
       showAppBar: true,
+      backFallbackLocation: '/natal',
       children: [
         const V2SectionTitle(title: '资料来源'),
         _buildProfileSourceSelector(),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme/guoxue_colors.dart';
 import '../../app/theme/guoxue_typography.dart';
 import '../../shared/widgets/classical_card.dart';
+import '../../shared/widgets/app_back_button.dart';
 import 'zhouyi_models.dart';
 
 /// 周易本经卦详情页 —— 卦名/卦象/上下卦/卦辞/象辞/爻辞/白话说明
@@ -13,8 +14,10 @@ class ZhouyiDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(fallbackLocation: '/reference/zhouyi'),
         title: Text(hexagram.name),
         backgroundColor: const Color(0xFF1A1410),
+        foregroundColor: GuoXueColors.ricePaper,
       ),
       backgroundColor: const Color(0xFF1A1410),
       body: SingleChildScrollView(

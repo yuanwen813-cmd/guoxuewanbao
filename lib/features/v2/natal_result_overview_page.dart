@@ -31,6 +31,7 @@ class NatalResultOverviewPage extends ConsumerWidget {
       subtitle: '已生成八字命理结构，可进入本命总览、四柱、流年和月度查看。',
       icon: Icons.fact_check_outlined,
       showAppBar: true,
+      backFallbackLocation: '/natal/reading',
       children: [
         const _ResultScopeNotice(),
         if (profile != null) ...[
