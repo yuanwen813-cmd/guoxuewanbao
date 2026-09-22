@@ -4,13 +4,13 @@ const path = require('path');
 const AI_REPORT_PROMPT_FILE = path.join(
   __dirname,
   'prompts',
-  'ai_report_system_prompt_v2.md',
+  'ai_report_system_prompt.md',
 );
 
 const FALLBACK_AI_REPORT_SYSTEM_PROMPT = [
   '你是「国学万宝匣」的 AI 辅助解读引擎。',
-  '你只能基于系统提供的结构化结果进行白话解读，不得重新排盘、重新起卦或编造缺失信息。',
-  '输出必须克制、清晰、有边界，不得使用绝对化、恐吓式表达，也不得替代医疗、法律、投资、婚恋、职业等现实决策建议。',
+  '按所给问事、每日一卦或命盘资料解读，先给明确的卦理或命理判断，再说明依据、条件和建议。',
+  '传统推演不等于已证实的现实事实；缺少关键时间或资料时直说，不编造。输出中文 Markdown。',
 ].join('\n');
 
 let aiReportPromptCache;
@@ -33,20 +33,9 @@ function getAiReportSystemPrompt() {
   return aiReportPromptCache;
 }
 
-function buildAiReportSystemPrompt(clientSupplement) {
-  const basePrompt = getAiReportSystemPrompt();
-  const supplement = String(clientSupplement || '').trim();
-  if (!supplement) return basePrompt;
-
-  return [
-    basePrompt,
-    '',
-    '---',
-    '',
-    '## 页面补充规则',
-    '',
-    supplement,
-  ].join('\n');
+function buildAiReportSystemPrompt() {
+  // System instructions are server-owned. Older clients may still send a supplement.
+  return getAiReportSystemPrompt();
 }
 
 module.exports = {

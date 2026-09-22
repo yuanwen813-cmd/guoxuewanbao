@@ -39,55 +39,23 @@ void main() {
       AiReportFeatureKeys.tiebanShenshu,
     );
 
-    expect(daily.map((item) => item.priceTier), ['one_yuan']);
-    expect(daily.single.priceCents, 100);
-    expect(daily.single.modelId, AiReportModelIds.deepseekV4Flash);
-
-    expect(ask.map((item) => item.priceTier), [
-      'one_yuan',
-      'standard_3_9',
-    ]);
-    expect(ask.any((item) => item.priceTier == 'advanced_6_9'), isFalse);
-    expect(ask.any((item) => item.priceTier == 'premium_13_9'), isFalse);
-    expect(ask.map((item) => item.modelId), [
-      AiReportModelIds.deepseekV4Flash,
-      AiReportModelIds.deepseekV4Pro,
-    ]);
-
-    expect(bazi.map((item) => item.priceTier), [
-      'one_yuan',
-      'standard_3_9',
-      'advanced_6_9',
-    ]);
-    expect(bazi.map((item) => item.modelId), [
-      AiReportModelIds.deepseekV4Flash,
-      AiReportModelIds.deepseekV4Pro,
-      AiReportModelIds.deepseekV4Pro,
-    ]);
-    expect(bazi.every((item) => item.enabled), isTrue);
+    expect(daily.length, 1);
+    expect(ask.length, 2);
+    expect(bazi.length, 3);
+    expect(ziwei.length, 3);
+    expect(tieban.length, 2);
+    for (final product in AiReportProductCatalog.all) {
+      expect(product.priceTier, 'flat_5');
+      expect(product.priceCents, 500);
+      expect(product.priceLabel, '¥5');
+      expect(product.buttonTitle, startsWith('¥5 '));
+      expect(product.modelId, AiReportModelIds.doubaoSeed21Pro);
+      expect(product.enabled, isTrue);
+    }
     expect(
       bazi.firstWhere((item) => item.id == 'bazi_deep_6_9').maxWords,
       12000,
     );
-    expect(ziwei.map((item) => item.priceTier), [
-      'one_yuan',
-      'standard_3_9',
-      'advanced_6_9',
-    ]);
-    expect(ziwei.map((item) => item.modelId), [
-      AiReportModelIds.deepseekV4Flash,
-      AiReportModelIds.deepseekV4Pro,
-      AiReportModelIds.deepseekV4Pro,
-    ]);
-    expect(ziwei.every((item) => item.enabled), isTrue);
-    expect(tieban.map((item) => item.priceTier), [
-      'standard_3_9',
-      'advanced_6_9',
-    ]);
-    expect(
-        tieban.every((item) => item.modelId == AiReportModelIds.deepseekV4Pro),
-        isTrue);
-    expect(tieban.every((item) => item.enabled), isTrue);
     expect(AiReportProductCatalog.byId('bazi_custom_13_9'), isNull);
     expect(AiReportProductCatalog.byId('ziwei_premium'), isNull);
     expect(AiReportProductCatalog.byId('tieban_premium'), isNull);

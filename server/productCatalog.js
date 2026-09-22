@@ -1,89 +1,71 @@
+const { getDoubaoModelId } = require('./doubaoClient');
+
+const AI_REPORT_PRICE_CENTS = 500;
+
 const aiProducts = {
   question_brief_1: {
     id: 'question_brief_1',
     reportType: 'question_brief',
-    priceCents: 100,
-    model: 'deepseek-v4-flash',
     maxTokens: 1800,
     enabled: true,
   },
   question_full_3_9: {
     id: 'question_full_3_9',
     reportType: 'question_full',
-    priceCents: 390,
-    model: 'deepseek-v4-pro',
     maxTokens: 6000,
     enabled: true,
   },
   bazi_brief_1: {
     id: 'bazi_brief_1',
     reportType: 'bazi_brief',
-    priceCents: 100,
-    model: 'deepseek-v4-flash',
     maxTokens: 3200,
     enabled: true,
   },
   bazi_basic_3_9: {
     id: 'bazi_basic_3_9',
     reportType: 'bazi_basic',
-    priceCents: 390,
-    model: 'deepseek-v4-pro',
     maxTokens: 6000,
     enabled: true,
   },
   bazi_deep_6_9: {
     id: 'bazi_deep_6_9',
     reportType: 'bazi_deep',
-    priceCents: 690,
-    model: 'deepseek-v4-pro',
     maxTokens: 12000,
     enabled: true,
   },
   ziwei_brief: {
     id: 'ziwei_brief',
     reportType: 'ziwei_brief',
-    priceCents: 100,
-    model: 'deepseek-v4-flash',
     maxTokens: 3200,
     enabled: true,
   },
   ziwei_basic: {
     id: 'ziwei_basic',
     reportType: 'ziwei_basic',
-    priceCents: 390,
-    model: 'deepseek-v4-pro',
     maxTokens: 6000,
     enabled: true,
   },
   ziwei_deep: {
     id: 'ziwei_deep',
     reportType: 'ziwei_deep',
-    priceCents: 690,
-    model: 'deepseek-v4-pro',
     maxTokens: 10000,
     enabled: true,
   },
   tieban_basic: {
     id: 'tieban_basic',
     reportType: 'tieban_basic',
-    priceCents: 390,
-    model: 'deepseek-v4-pro',
     maxTokens: 6000,
     enabled: true,
   },
   tieban_deep: {
     id: 'tieban_deep',
     reportType: 'tieban_deep',
-    priceCents: 690,
-    model: 'deepseek-v4-pro',
     maxTokens: 10000,
     enabled: true,
   },
   daily_hexagram_brief: {
     id: 'daily_hexagram_brief',
     reportType: 'daily_brief',
-    priceCents: 100,
-    model: 'deepseek-v4-flash',
     maxTokens: 1800,
     enabled: true,
   },
@@ -107,7 +89,13 @@ function getAiProduct(productId) {
   const canonicalId = aliases[productId] || productId;
   const product = aiProducts[canonicalId];
   if (!product) return null;
-  return { ...product, requestedProductId: productId, id: canonicalId };
+  return {
+    ...product,
+    requestedProductId: productId,
+    id: canonicalId,
+    priceCents: AI_REPORT_PRICE_CENTS,
+    model: getDoubaoModelId(),
+  };
 }
 
 const fixedRechargeAmounts = new Set([100, 390, 690, 1390]);
@@ -123,6 +111,7 @@ function validateRechargeAmount(amountCents) {
 }
 
 module.exports = {
+  AI_REPORT_PRICE_CENTS,
   getAiProduct,
   validateRechargeAmount,
 };

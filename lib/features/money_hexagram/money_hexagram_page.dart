@@ -168,7 +168,7 @@ class _MoneyHexagramPageState extends ConsumerState<MoneyHexagramPage> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          '屏气凝神清空思想，心中拜神求问自己所卜之事，\n待到气息憋不住时（脑中极度空白），点击摇卦',
+                          '闭气凝神，冥想所问之事，待脑中无杂念之时，点击摇卦。',
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: Colors.white70),
                         ),

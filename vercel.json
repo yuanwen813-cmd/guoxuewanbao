@@ -4,7 +4,8 @@
   "outputDirectory": "build/web",
   "functions": {
     "api/index.js": {
-      "includeFiles": "server/prompts/**"
+      "includeFiles": "server/prompts/**",
+      "maxDuration": 300
     }
   },
   "headers": [

@@ -9,9 +9,7 @@ const {
 } = require('./walletService');
 const { buildAiReportSystemPrompt } = require('./promptLoader');
 const { recordServiceEventQuietly } = require('./monitoringService');
-
-const DEEPSEEK_BASE_URL =
-  process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
+const { callDoubao, getDoubaoConfig } = require('./doubaoClient');
 
 function maxPromptChars() {
   return Math.max(1000, Number(process.env.AI_PROMPT_MAX_CHARS || 16000));
@@ -49,48 +47,20 @@ function assertJsonSizeLimit(name, value, maxChars) {
 }
 
 function ensureAiAnswer(value) {
-  const answer = String(value || '').trim();
+  const answer = typeof value === 'string' ? value.trim() : '';
   if (!answer) {
     throw new HttpError(424, 'AI 服务未返回有效内容');
   }
   return answer;
 }
 
-async function callDeepSeek({ product, systemPrompt, userPrompt, temperature }) {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) throw new HttpError(503, '服务端未配置 DeepSeek API Key');
-
-  const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: product.model,
-      messages: [
-        { role: 'system', content: systemPrompt || '' },
-        { role: 'user', content: userPrompt || '' },
-      ],
-      temperature: typeof temperature === 'number' ? temperature : 0.45,
-      max_tokens: product.maxTokens,
-    }),
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const message =
-      data.error?.message || data.message || `AI 服务暂时不可用：${response.status}`;
-    throw new HttpError(response.status, message, data);
-  }
-
-  const answer = ensureAiAnswer(data.choices?.[0]?.message?.content);
-
-  return {
-    answer,
-    usage: data.usage || {},
-    model: data.model || product.model,
-  };
+function addReportNotice(answer, product) {
+  const content = ensureAiAnswer(answer);
+  const natal = /^(bazi|ziwei|tieban)_/.test(product.reportType);
+  const notice = natal
+    ? '命理解读为传统民俗文化内容，不能当作将发生的事实，仅作娱乐参考。'
+    : '解卦为传统民俗文化内容，不能当作将发生的事实，仅作娱乐参考。';
+  return `${notice}\n\nAI 生成内容\n\n${content}`;
 }
 
 async function generateAiReport({ userId, body, dependencies = {} }) {
@@ -99,13 +69,17 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
   const debitReport = dependencies.createAiReportDebit || createAiReportDebit;
   const completeReport = dependencies.completeAiReport || completeAiReport;
   const refundReport = dependencies.refundAiReport || refundAiReport;
-  const requestAi = dependencies.callDeepSeek || callDeepSeek;
+  const requestAi = dependencies.callDoubao || callDoubao;
   const recordMonitoringEvent =
     dependencies.recordServiceEventQuietly || recordServiceEventQuietly;
   const product = productResolver(body.productId);
   if (!product) throw new HttpError(400, 'AI 解析档位不存在或已下架');
   if (!product.enabled) {
     throw new HttpError(400, product.disabledReason || '该 AI 解析档位暂未开放');
+  }
+  // Cached Web pages and older APKs must not silently charge a new price.
+  if (body.expectedPriceCents !== product.priceCents) {
+    throw new HttpError(409, 'AI 解析现为每次 5 元，请刷新页面或更新应用后确认价格（本次未扣费）');
   }
   if (!body.userPrompt) {
     throw new HttpError(400, 'AI 解析缺少必要内容');
@@ -140,6 +114,7 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
   );
 
   const promptSnapshot = [title, systemPrompt, userPrompt].join('\n\n');
+  const providerConfig = dependencies.callDoubao ? undefined : getDoubaoConfig();
 
   const debit = await debitReport({
     userId,
@@ -155,16 +130,17 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
       product,
       systemPrompt,
       userPrompt,
-      temperature: body.temperature,
+      config: providerConfig,
     });
+    const answer = addReportNotice(ai.answer, product);
     const completed = await completeReport({
       orderId: debit.order.id,
-      resultText: ai.answer,
+      resultText: answer,
       model: ai.model,
       usage: ai.usage,
     });
     return {
-      answer: ai.answer,
+      answer,
       model: ai.model,
       report: completed.order,
       wallet: completed.wallet,
@@ -211,6 +187,7 @@ async function getAiReportDetail({ userId, orderId }) {
 }
 
 module.exports = {
+  addReportNotice,
   ensureAiAnswer,
   generateAiReport,
   getAiReportDetail,

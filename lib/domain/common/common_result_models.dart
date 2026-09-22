@@ -61,6 +61,11 @@ class CommonDivinationResult {
   final String categoryId;
   final String? userQuestion;
   final DateTime createdAt;
+  final DateTime? recordedCastTimeUtc;
+  final bool hasRecordedCastTime;
+  DateTime? get castTimeUtc => hasRecordedCastTime
+      ? (recordedCastTimeUtc ?? createdAt.toUtc())
+      : null;
   final String summary;
   final DivinationType type;
 
@@ -102,6 +107,8 @@ class CommonDivinationResult {
     required this.categoryId,
     this.userQuestion,
     required this.createdAt,
+    this.recordedCastTimeUtc,
+    this.hasRecordedCastTime = true,
     required this.summary,
     this.type = DivinationType.generic,
     this.primaryHexagram,
@@ -134,6 +141,8 @@ class CommonDivinationResult {
         'categoryId': categoryId,
         'userQuestion': userQuestion,
         'createdAt': createdAt.toIso8601String(),
+        if (castTimeUtc != null)
+          'castTimeUtc': castTimeUtc!.toUtc().toIso8601String(),
         'summary': summary,
         'type': type.name,
         if (primaryHexagram != null)
@@ -142,6 +151,8 @@ class CommonDivinationResult {
         if (mutualHexagram != null) 'mutualHexagram': mutualHexagram!.toJson(),
         if (changedHexagram != null)
           'changedHexagram': changedHexagram!.toJson(),
+        if (chartSections != null)
+          'chartSections': chartSections!.map((section) => section.toJson()).toList(),
         'interpretation': {
           if (xiangDuan != null) 'xiangDuan': xiangDuan,
           if (movingYaoAnalysis != null) 'movingYaoAnalysis': movingYaoAnalysis,
@@ -171,12 +182,17 @@ class CommonDivinationResult {
   factory CommonDivinationResult.fromJson(Map<String, dynamic> j) {
     final interp = j['interpretation'] as Map<String, dynamic>? ?? {};
     final flags = j['flags'] as Map<String, dynamic>? ?? {};
+    final recordedTime = DateTime.tryParse(j['castTimeUtc'] as String? ?? '');
+    final createdAtText = j['createdAt'] as String;
     return CommonDivinationResult(
       featureId: j['featureId'] as String,
       featureName: j['featureName'] as String,
       categoryId: j['categoryId'] as String,
       userQuestion: j['userQuestion'] as String?,
-      createdAt: DateTime.parse(j['createdAt'] as String),
+      createdAt: DateTime.parse(createdAtText),
+      recordedCastTimeUtc: recordedTime,
+      hasRecordedCastTime: recordedTime != null ||
+          RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(createdAtText),
       summary: j['summary'] as String? ?? '',
       type: DivinationType.values.firstWhere(
           (t) => t.name == (j['type'] as String?),
@@ -193,6 +209,10 @@ class CommonDivinationResult {
       changedHexagram: j['changedHexagram'] != null
           ? HexagramCard.fromJson(j['changedHexagram'] as Map<String, dynamic>)
           : null,
+      chartSections: (j['chartSections'] as List?)
+          ?.whereType<Map>()
+          .map((item) => ChartSection.fromJson(Map<String, dynamic>.from(item)))
+          .toList(),
       xiangDuan: interp['xiangDuan'] as String?,
       movingYaoAnalysis: interp['movingYaoAnalysis'] as String?,
       primaryHexagramAnalysis: interp['primaryHexagramAnalysis'] as String?,
@@ -229,6 +249,8 @@ class CommonDivinationResult {
       categoryId: categoryId,
       userQuestion: userQuestion,
       createdAt: createdAt,
+      recordedCastTimeUtc: recordedCastTimeUtc,
+      hasRecordedCastTime: hasRecordedCastTime,
       summary: summary,
       type: type,
       primaryHexagram: primaryHexagram,
@@ -342,4 +364,20 @@ class ChartSection {
   final String title;
   final List<MapEntry<String, String>> rows;
   const ChartSection({required this.title, required this.rows});
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        'rows': rows.map((row) => {'label': row.key, 'value': row.value}).toList(),
+      };
+
+  factory ChartSection.fromJson(Map<String, dynamic> json) => ChartSection(
+        title: json['title'] as String? ?? '',
+        rows: (json['rows'] as List? ?? const [])
+            .whereType<Map>()
+            .map((row) => MapEntry(
+                  row['label'] as String? ?? '',
+                  row['value'] as String? ?? '',
+                ))
+            .toList(),
+      );
 }

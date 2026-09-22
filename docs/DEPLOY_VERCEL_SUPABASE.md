@@ -67,12 +67,12 @@ build/web
 必须只放在服务端的变量：
 
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `DEEPSEEK_API_KEY`
+- `ARK_API_KEY`
 - `WECHAT_PAY_PRIVATE_KEY`
 - `WECHAT_PAY_API_V3_KEY`
 - `ALIPAY_PRIVATE_KEY`
 
-前端只通过 `GUOXUE_API_BASE_URL` 调用统一 API，不持有 DeepSeek Key、支付私钥或 Service Role Key。
+前端只通过 `GUOXUE_API_BASE_URL` 调用统一 API，不持有 火山方舟 API Key、支付私钥或 Service Role Key。
 
 ## 6. 自定义域名
 
@@ -100,7 +100,7 @@ flutter build apk --release --dart-define=GUOXUE_API_BASE_URL=https://api.your-d
 小程序：
 
 - request 合法域名配置为 `https://api.your-domain.com`
-- 小程序端不得保存任何支付私钥或 DeepSeek Key
+- 小程序端不得保存任何支付私钥或 火山方舟 API Key
 - 第一版仍使用手机号验证码登录
 
 ## 8. 微信支付配置
@@ -175,9 +175,9 @@ ALIPAY_RETURN_URL=
 
 1. 客户端调用 `/api/ai-report-generate`。
 2. 服务端根据 `productId` 查价格，不能相信前端价格。
-3. 余额不足直接返回，不调用 DeepSeek。
+3. 余额不足直接返回，不调用 豆包。
 4. 余额足够时，数据库事务中扣钱包余额、写 `ai_debit` 流水、创建 `ai_report_orders`。
-5. 事务提交后调用 DeepSeek。
+5. 事务提交后调用 豆包。
 6. 成功则保存报告内容，订单状态为 `completed`。
 7. 失败则数据库事务退款，写 `ai_refund` 流水，订单状态为 `refunded`。
 8. 报告复看通过 `/api/ai-report-detail` 查询，不重复扣费。
@@ -194,7 +194,7 @@ ALIPAY_RETURN_URL=
 - 支付宝回调验签失败不入账。
 - 金额不一致不入账。
 - 重复回调不重复入账。
-- AI 余额不足不调用 DeepSeek。
+- AI 余额不足不调用 豆包。
 - AI 成功扣费并保存报告。
 - AI 调用失败自动退款。
 - 报告复看不重复扣费。
@@ -211,3 +211,63 @@ ALIPAY_RETURN_URL=
 2. 确认四张新增表和 `delete_account_data` 函数存在。
 3. 部署 Vercel。
 4. 使用两个账号验证记录隔离和跨设备恢复。
+
+## 豆包接入与统一解析价格
+
+当前付费报告改用火山方舟官方 Responses 接口，不再调用 DeepSeek，也不自动回退到旧模型。本机已完成最小真实请求验证；公网完整报告、扣费及退款仍需部署后联调，不能把连通性测试等同于上线验收。
+
+### 服务端配置
+
+仅在 Vercel 的目标环境配置，不能写入 Flutter、dart-define 或公开文件：
+
+```dotenv
+ARK_API_KEY=在Vercel填写自己的方舟密钥
+ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+ARK_MODEL_ID=doubao-seed-2-1-pro-260915
+ARK_TIMEOUT_MS=270000
+```
+
+模型默认使用已实测的完整版本 ID `doubao-seed-2-1-pro-260915`，不使用旧简称 `doubao-seed-2.1-pro`。如果 Vercel 已配置旧模型名称，必须修改环境变量并重新部署；环境变量会覆盖代码默认值。密钥使用方舟 API Key，不是 Access Key ID / Secret 两个值拼接。地址限定为上述官方北京 API，以防密钥误发至其他站点；ARK_BASE_URL 不附加 /responses，程序自行拼接。旧 DEEPSEEK_API_KEY 不再用于当前付费报告链路。
+
+请求发送到 `/responses`，使用 `model` 和 `input`，system / user 消息均以 `input_text` 传入，并设置 `store: false`（不启用方舟响应对象存储，不代表关闭供应商全部服务日志）。不沿用 DeepSeek 的 temperature、max_tokens，也不擅自关闭深度思考。篇幅由报告任务提示词指定，输出上限暂用所选模型默认值；深度报告是否能达到目标篇幅需联调。
+
+仅接收已完成响应中的 assistant message / output_text 正文，不将 reasoning 作为报告。不完整、拒绝、空正文、失败或超时均进入现有失败退款流程。Responses 的 input_tokens / output_tokens 转换为现有日志接口的 prompt_tokens / completion_tokens，不改钱包数据库 RPC。字段结构参考 [火山引擎官方 SDK](https://github.com/volcengine/ark-runtime-python)。
+
+新的独立提示词文件为 `server/prompts/ai_report_system_prompt.md`，前端只传任务、篇幅、问题与资料，不再叠加旧系统提示词。如 Vercel 配过 `AI_REPORT_SYSTEM_PROMPT`，删除旧覆盖值后才会使用新文件。
+
+### 价格与历史兼容
+
+- 所有新 AI 报告统一 500 分（5 元），由 server/productCatalog.js 定价。
+- 保留简析、基础、深度等报告选项及原 productId，以兼容历史复看；ID 中的旧数字不再代表现价。
+- 请求带 expectedPriceCents，仅用于核对客户端已展示的价格，绝不以客户端报价扣款。
+- 未发送价格确认或仍发送旧价格的网页/APK 返回 409，提示刷新/更新，不扣费。
+- 旧订单实付金额、钱包余额、退款金额不重写，历史报告复看不收费。退款仍按原订单实付金额执行。充值金额档位不变。
+- 空响应、被截断的报告、调用失败或超时进入已有失败退款链路。保留模型原文，不进行第二次模型改写；民俗提示在保存正文前添加，因此复看、分享、HTML 导出均随正文携带。
+
+### 数据库日志
+
+已有数据库单独执行 `supabase/migrations/20260921_ark_ai_call_provider.sql`。新建库执行 schema.sql 已包含该变更。不需要重建钱包、重跑充值脚本或改动历史记录。
+
+该迁移只用触发器把新豆包/ep-模型调用日志标记为 volcengine，不更改任何扣费、完成、退款 RPC 的签名或逻辑。历史 DeepSeek 日志保持原样。
+
+### 时间与耗时
+
+- 新起卦结果额外保存 UTC 时间，AI 请求附上换算后的完整北京时间，不使用报告请求时间替代。
+- 新历史记录保留六爻结构区块；旧记录没有的内容不伪造，旧时间缺少时区时明确注明不足。排盘/起卦算法不变。
+- AI 等待时间单独延长到 330 秒；服务端模型请求最多 270 秒，为保存或退款留出时间，其他钱包请求超时不变。
+- vercel.json 设置函数最长 300 秒，部署时需要核实已开启 Fluid Compute 且项目支持该上限，参见 [Vercel 官方时长说明](https://vercel.com/docs/functions/configuring-functions/duration)。
+- 这仍是同步请求，不是后台任务。平台提前终止、断网或数据库退款失败仍需核对订单和流水；不能仅凭前端超时认定已退款。超长详细报告能否在上限内完成需联调验证。
+
+### 联调与测试
+
+2026-09-22 本机验证：`npm run check:api` 与 `npm run test:server` 通过。覆盖 Responses 正文读取、token 记录、统一500分、旧价格拦截、余额不足不调用模型，以及无效/不完整响应触发退款。自动测试不访问生产数据库。
+
+同日本机使用 `.env.local` 当前密钥，通过项目 `callDoubao` 真实请求 `/responses`：HTTP 200，模型 `doubao-seed-2-1-pro-260915`，正文“连接成功。”，耗时约7.9秒。该请求未操作用户钱包，仅验证密钥、模型、请求格式及正文解析。
+
+发布前复测：`flutter test test/features/ai_reports test/features/ask_guidance test/widget_test.dart --no-pub` 共40项通过，涵盖提示词时间、统一价格、摇卦提示、空结果重试、问题带入和历史报告复看等。
+
+正式 Web 构建通过：`flutter build web --release --no-pub --web-renderer html --pwa-strategy=none --dart-define=GUOXUE_API_BASE_URL=https://guoxuewanbao.cn`。构建有现存 Cupertino 字体提示，未阻断构建。本轮未进行生产钱包真实扣费测试，未重新打包 APK。旧 APK 请求旧价格时会被拦截且不扣费，需更新 APK 或使用刷新后的 Web 页面。
+
+部署后还需用测试账号联调真实完整报告；基础连通性不能证明长报告耗时、篇幅及线上退款一定正常。环境变量必须在 Production 配置后重新部署，不能仅修改本机 `.env.local`。
+
+人工重点：问事/每日一卦/命盘均显示5元，扣款500分，失败退回500分；历史报告复看不扣费；旧客户端先要求刷新；方舟日志显示预期模型；报告包含正确原始时间、民俗提示与有效正文。真实请求会使用方舟额度，联调前另行确认。

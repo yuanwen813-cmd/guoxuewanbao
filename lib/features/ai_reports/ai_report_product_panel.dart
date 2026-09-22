@@ -14,6 +14,7 @@ import '../account/user_data_api.dart';
 import '../wallet/server_wallet_api.dart';
 import '../wallet/wallet_store.dart';
 import 'ai_report_product_config.dart';
+import 'ai_report_prompt_builder.dart';
 
 class AiReportProductPanel extends ConsumerStatefulWidget {
   final String featureKey;
@@ -226,6 +227,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
               child: _AiReportProductTile(
                 config: config,
                 loading: _loadingProductId == config.id,
+                busy: _loadingProductId != null,
                 answer: _answers[config.id],
                 error: _errors[config.id],
                 reportId: _reportIds[config.id],
@@ -246,6 +248,9 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   }
 
   Future<void> _generateReport(AiReportProductConfig config) async {
+    if (_loadingProductId != null || _answers[config.id]?.isNotEmpty == true) {
+      return;
+    }
     final auth = ref.read(authStoreProvider);
     if (!auth.isAuthenticated) {
       setState(() {
@@ -284,7 +289,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
                 productId: config.id,
                 featureKey: config.featureKey,
                 title: config.buttonTitle,
-                systemPrompt: _systemPrompt,
+                systemPrompt: '',
                 userPrompt: _buildUserPrompt(config, focus),
                 temperature: 0.45,
                 sourceJson: widget.sourceJson,
@@ -379,42 +384,19 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   String get _defaultDestinyFocus => '整体命盘详解';
 
   String _buildUserPrompt(AiReportProductConfig config, String focus) {
-    final template =
-        AiReportPromptTemplates.templates[config.promptTemplateId] ?? '';
-    final source = widget.sourceJson?.trim().isNotEmpty == true
-        ? widget.sourceJson!.trim()
-        : (widget.sourceSummary ?? '').trim();
-    return [
-      '用户重点想了解的事项：$focus',
-      '功能：${config.featureKey}',
-      '报告类型：${config.reportType}',
-      '价格档位：${config.priceLabel}',
-      '目标字数：${config.minWords}-${config.maxWords} 字',
-      'promptTemplateId：${config.promptTemplateId}',
-      '',
-      '模板要求：',
-      template,
-      '',
-      '本地结构化结果：',
-      source,
-      '',
-      '请严格基于以上结构化结果生成中文报告。若结构化结果中没有某项信息，请明确说明“当前结果未提供该项，不作展开”。',
-    ].join('\n');
+    return buildAiReportUserPrompt(
+      config: config,
+      focus: focus,
+      sourceJson: widget.sourceJson,
+      sourceSummary: widget.sourceSummary,
+    );
   }
-
-  static const _systemPrompt = '''
-你是“国学万宝匣”的 AI 白话解读助手。
-你只能根据应用本地已经生成的命盘、卦象或问事结构化结果进行解释。
-禁止重新排盘、重新起卦、重新计算四柱、生成新的条文编号或编造不存在的数据。
-禁止输出确定性断语，禁止使用“必然发财、必然离婚、必然生病、一定成功”等表达。
-不得提供医疗、法律、投资等高风险现实决策结论。
-报告需要通俗、温和、分层清楚，并在结尾加入传统文化参考免责声明。
-''';
 }
 
 class _AiReportProductTile extends StatelessWidget {
   final AiReportProductConfig config;
   final bool loading;
+  final bool busy;
   final String? answer;
   final String? error;
   final String? reportId;
@@ -425,6 +407,7 @@ class _AiReportProductTile extends StatelessWidget {
   const _AiReportProductTile({
     required this.config,
     required this.loading,
+    required this.busy,
     required this.answer,
     required this.error,
     required this.reportId,
@@ -489,7 +472,7 @@ class _AiReportProductTile extends StatelessWidget {
               FilledButton.icon(
                 key: Key('ai_report_${config.id}'),
                 onPressed:
-                    loading || !config.enabled || hasAnswer ? null : onGenerate,
+                    busy || !config.enabled || hasAnswer ? null : onGenerate,
                 icon: loading
                     ? const SizedBox(
                         width: 16,
@@ -512,7 +495,7 @@ class _AiReportProductTile extends StatelessWidget {
             const LinearProgressIndicator(minHeight: 3),
             const SizedBox(height: 6),
             Text(
-              '正在提交服务端扣费并生成报告，请稍候。',
+              '正在生成报告，详细解析可能需要几分钟，请勿重复提交。',
               style: GuoXueTypography.caption.copyWith(
                 color: GuoXueColors.inkGray,
                 letterSpacing: 0,

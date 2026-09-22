@@ -177,22 +177,22 @@ async function run() {
     () =>
       generateAiReport({
         userId: 'user-1',
-        body: { productId: 'question_full_3_9', userPrompt: '测试问题' },
+        body: { productId: 'question_full_3_9', expectedPriceCents: 500, userPrompt: '测试问题' },
         dependencies: {
           getAiProduct: () => ({
             id: 'question_full_3_9',
             reportType: 'question_full',
-            priceCents: 390,
-            model: 'deepseek-v4-pro',
+            priceCents: 500,
+            model: 'doubao-seed-2-1-pro-260915',
             maxTokens: 100,
             enabled: true,
           }),
           buildAiReportSystemPrompt: () => 'system prompt',
           createAiReportDebit: async () => {
             debitCalls += 1;
-            return { order: reportRow(), wallet: walletRow(110) };
+            return { order: reportRow(), wallet: walletRow(0) };
           },
-          callDeepSeek: async () => {
+          callDoubao: async () => {
             throw new HttpError(503, 'AI 服务暂时不可用');
           },
           refundAiReport: async () => {

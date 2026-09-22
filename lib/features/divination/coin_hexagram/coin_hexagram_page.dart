@@ -519,7 +519,7 @@ class _CoinHexagramPageState extends ConsumerState<CoinHexagramPage> {
         child: Column(children: [
           const Icon(Icons.monetization_on, color: GuoXueColors.gold, size: 56),
           const SizedBox(height: 12),
-          Text(_throws.length >= 6 ? '六爻已全，请生成卦象' : '请静心默念所问之事，自下而上摇出六爻。',
+          Text(_throws.length >= 6 ? '六爻已全，请生成卦象' : '闭气凝神，冥想所问之事，待脑中无杂念之时，点击摇卦。',
               textAlign: TextAlign.center,
               style: GuoXueTypography.body.copyWith(color: Colors.white70)),
           const SizedBox(height: 16),

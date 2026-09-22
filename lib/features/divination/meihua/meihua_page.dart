@@ -482,7 +482,7 @@ class _MeihuaYiPageState extends ConsumerState<MeihuaYiPage> {
               Text('起卦方法', style: GuoXueTypography.h3),
               const SizedBox(height: 8),
               Text(
-                '屏气凝神，清空思想，心中拜神求问自己所卜之事；待到气息憋不住时，脑中极度空白，再点击开始起卦。',
+                '闭气凝神，冥想所问之事，待脑中无杂念之时，点击摇卦。',
                 style: GuoXueTypography.body.copyWith(height: 1.5),
               ),
             ],

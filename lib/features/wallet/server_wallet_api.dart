@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../ai_reports/ai_report_product_config.dart';
 import 'wallet_store.dart';
 
 typedef AuthTokenProvider = Future<String?> Function();
@@ -154,6 +155,7 @@ class ServerWalletApi {
         '/api/ai-report-generate',
         data: {
           'productId': productId,
+          'expectedPriceCents': AiReportProductConfig.uniformPriceCents,
           'featureKey': featureKey,
           'title': title,
           'systemPrompt': systemPrompt,
@@ -161,7 +163,9 @@ class ServerWalletApi {
           'temperature': temperature,
           'questionResultJson': _tryDecodeJson(sourceJson),
         },
-        options: await _authOptions(),
+        options: (await _authOptions()).copyWith(
+          receiveTimeout: const Duration(seconds: 330),
+        ),
       );
       final data = response.data ?? const <String, dynamic>{};
       return ServerAiReportResult(
@@ -172,6 +176,11 @@ class ServerWalletApi {
       );
     } on DioException catch (error) {
       final wallet = _maybeWalletFromResponse(error.response?.data);
+      if (error.type == DioExceptionType.receiveTimeout) {
+        throw const ServerWalletException(
+          '等待报告超时，服务端可能仍在处理。请先在我的报告和钱包流水核对结果，避免重复提交。',
+        );
+      }
       throw ServerWalletException.fromDio(error, wallet: wallet);
     }
   }
