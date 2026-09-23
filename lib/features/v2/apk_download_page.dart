@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -12,8 +13,8 @@ class ApkDownloadPage extends StatelessWidget {
 
   static const apkPath = '/downloads/guoxuewanbao-latest.apk';
   static const apkFileName = 'guoxuewanbao-latest.apk';
-  static const apkVersionLabel = '当前 Android 测试版';
-  static const estimatedSize = '22.9 MB';
+  static const apkVersionLabel = 'Android 测试版 · 1.0.0（构建 2）';
+  static const estimatedSize = '实际大小以下载文件为准';
 
   @override
   Widget build(BuildContext context) {
@@ -50,8 +51,8 @@ class ApkDownloadPage extends StatelessWidget {
   }
 
   static String _absoluteDownloadUrl() {
-    final base = Uri.base;
-    return base.replace(path: apkPath, query: '', fragment: '').toString();
+    final base = kIsWeb ? Uri.base : Uri.parse('https://guoxuewanbao.cn');
+    return base.resolve(apkPath).toString();
   }
 }
 

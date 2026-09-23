@@ -381,8 +381,9 @@ void main() {
     expect(find.text('下载 Android App'), findsWidgets);
     expect(find.byKey(const Key('apk_download_button')), findsOneWidget);
     expect(find.byKey(const Key('apk_copy_link_button')), findsOneWidget);
-    expect(find.textContaining('/downloads/guoxuewanbao-latest.apk'),
+    expect(find.text('https://guoxuewanbao.cn/downloads/guoxuewanbao-latest.apk'),
         findsOneWidget);
+    expect(find.text('Android 测试版 · 1.0.0（构建 2）'), findsOneWidget);
   });
 
   testWidgets('question AI report still requires focus', (tester) async {
