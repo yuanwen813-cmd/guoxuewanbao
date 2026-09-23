@@ -229,16 +229,17 @@ ARK_TIMEOUT_MS=270000
 
 模型默认使用已实测的完整版本 ID `doubao-seed-2-1-pro-260915`，不使用旧简称 `doubao-seed-2.1-pro`。如果 Vercel 已配置旧模型名称，必须修改环境变量并重新部署；环境变量会覆盖代码默认值。密钥使用方舟 API Key，不是 Access Key ID / Secret 两个值拼接。地址限定为上述官方北京 API，以防密钥误发至其他站点；ARK_BASE_URL 不附加 /responses，程序自行拼接。旧 DEEPSEEK_API_KEY 不再用于当前付费报告链路。
 
-请求发送到 `/responses`，使用 `model` 和 `input`，system / user 消息均以 `input_text` 传入，并设置 `store: false`（不启用方舟响应对象存储，不代表关闭供应商全部服务日志）。不沿用 DeepSeek 的 temperature、max_tokens，也不擅自关闭深度思考。篇幅由报告任务提示词指定，输出上限暂用所选模型默认值；深度报告是否能达到目标篇幅需联调。
+请求发送到 `/responses`，使用 `model` 和 `input`，只发送一条 user 消息（`input_text`），并设置 `store: false`（不启用方舟响应对象存储，不代表关闭供应商全部服务日志）。请求只包含功能名称、用户事项、原始卦象或命盘资料及必要时间，不规定等级、篇幅、结论或输出格式。不沿用 DeepSeek 的 temperature、max_tokens，也不擅自关闭深度思考，输出上限使用模型默认值。
 
 仅接收已完成响应中的 assistant message / output_text 正文，不将 reasoning 作为报告。不完整、拒绝、空正文、失败或超时均进入现有失败退款流程。Responses 的 input_tokens / output_tokens 转换为现有日志接口的 prompt_tokens / completion_tokens，不改钱包数据库 RPC。字段结构参考 [火山引擎官方 SDK](https://github.com/volcengine/ark-runtime-python)。
 
-新的独立提示词文件为 `server/prompts/ai_report_system_prompt.md`，前端只传任务、篇幅、问题与资料，不再叠加旧系统提示词。如 Vercel 配过 `AI_REPORT_SYSTEM_PROMPT`，删除旧覆盖值后才会使用新文件。
+`server/promptLoader.js` 返回空系统提示词，不再读取旧文件或 `AI_REPORT_SYSTEM_PROMPT` 环境变量。Vercel 上的旧覆盖值可以删除；即使保留，也不会影响当前付费报告请求。请求资料由 `lib/features/ai_reports/ai_report_prompt_builder.dart` 组装。模型正文直接保存和展示，仅由程序添加已约定的民俗娱乐提示与 AI 内容标识，不进行二次模型改写。
 
 ### 价格与历史兼容
 
 - 所有新 AI 报告统一 500 分（5 元），由 server/productCatalog.js 定价。
-- 保留简析、基础、深度等报告选项及原 productId，以兼容历史复看；ID 中的旧数字不再代表现价。
+- 每个功能仅保留一个“¥5 AI 解析”选项，不显示等级或字数。内部沿用既有 productId，以兼容服务端和历史数据；ID 中的旧数字不代表现价。
+- 已购买的旧简析、基础、深度等报告全部保留免费复看、复制和分享。已有有效报告时不再提供同一结果的付费生成按钮；旧失败报告仍可通过单一入口重试。
 - 请求带 expectedPriceCents，仅用于核对客户端已展示的价格，绝不以客户端报价扣款。
 - 未发送价格确认或仍发送旧价格的网页/APK 返回 409，提示刷新/更新，不扣费。
 - 旧订单实付金额、钱包余额、退款金额不重写，历史报告复看不收费。退款仍按原订单实付金额执行。充值金额档位不变。
@@ -253,10 +254,11 @@ ARK_TIMEOUT_MS=270000
 ### 时间与耗时
 
 - 新起卦结果额外保存 UTC 时间，AI 请求附上换算后的完整北京时间，不使用报告请求时间替代。
+- 高岛易断在成卦时固定时间，页面重建不重取当前时间；梅花易数保存历史时复用已生成结果。命盘请求保留出生资料，不把报告生成时间当作起卦时间。
 - 新历史记录保留六爻结构区块；旧记录没有的内容不伪造，旧时间缺少时区时明确注明不足。排盘/起卦算法不变。
 - AI 等待时间单独延长到 330 秒；服务端模型请求最多 270 秒，为保存或退款留出时间，其他钱包请求超时不变。
 - vercel.json 设置函数最长 300 秒，部署时需要核实已开启 Fluid Compute 且项目支持该上限，参见 [Vercel 官方时长说明](https://vercel.com/docs/functions/configuring-functions/duration)。
-- 这仍是同步请求，不是后台任务。平台提前终止、断网或数据库退款失败仍需核对订单和流水；不能仅凭前端超时认定已退款。超长详细报告能否在上限内完成需联调验证。
+- 这仍是同步请求，不是后台任务。平台提前终止、断网或数据库退款失败仍需核对订单和流水；不能仅凭前端超时认定已退款。模型自然输出的长报告能否在上限内完成需联调验证。
 
 ### 联调与测试
 
@@ -264,10 +266,10 @@ ARK_TIMEOUT_MS=270000
 
 同日本机使用 `.env.local` 当前密钥，通过项目 `callDoubao` 真实请求 `/responses`：HTTP 200，模型 `doubao-seed-2-1-pro-260915`，正文“连接成功。”，耗时约7.9秒。该请求未操作用户钱包，仅验证密钥、模型、请求格式及正文解析。
 
-发布前复测：`flutter test test/features/ai_reports test/features/ask_guidance test/widget_test.dart --no-pub` 共40项通过，涵盖提示词时间、统一价格、摇卦提示、空结果重试、问题带入和历史报告复看等。
+本次修改复测：`flutter test test/features/ai_reports test/features/ask_guidance test/widget_test.dart --no-pub` 共54项通过，涵盖单一5元选项、去除等级和字数文案、精简请求、原始时间、页面重建时间不变、空结果重试、问题带入，以及旧档位报告免费复看、复制和分享。
 
-正式 Web 构建通过：`flutter build web --release --no-pub --web-renderer html --pwa-strategy=none --dart-define=GUOXUE_API_BASE_URL=https://guoxuewanbao.cn`。构建有现存 Cupertino 字体提示，未阻断构建。本轮未进行生产钱包真实扣费测试，未重新打包 APK。旧 APK 请求旧价格时会被拦截且不扣费，需更新 APK 或使用刷新后的 Web 页面。
+2026-09-23 本次修改的正式 Web 构建通过：`flutter build web --release --no-pub --web-renderer html --pwa-strategy=none --dart-define=GUOXUE_API_BASE_URL=https://guoxuewanbao.cn`。构建有现存 Cupertino 字体提示，未阻断构建。本轮未进行生产钱包真实扣费测试，未重新打包 APK。旧 APK 请求旧价格时会被拦截且不扣费，需更新 APK 或使用部署后刷新的 Web 页面。
 
-部署后还需用测试账号联调真实完整报告；基础连通性不能证明长报告耗时、篇幅及线上退款一定正常。环境变量必须在 Production 配置后重新部署，不能仅修改本机 `.env.local`。
+部署后还需用测试账号联调真实完整报告；基础连通性不能证明长报告耗时及线上退款一定正常。环境变量必须在 Production 配置后重新部署，不能仅修改本机 `.env.local`。
 
 人工重点：问事/每日一卦/命盘均显示5元，扣款500分，失败退回500分；历史报告复看不扣费；旧客户端先要求刷新；方舟日志显示预期模型；报告包含正确原始时间、民俗提示与有效正文。真实请求会使用方舟额度，联调前另行确认。

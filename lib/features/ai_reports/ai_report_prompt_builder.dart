@@ -11,7 +11,10 @@ String buildAiReportUserPrompt({
   var source = sourceJson?.trim().isNotEmpty == true
       ? sourceJson!.trim()
       : (sourceSummary ?? '').trim();
-  String? timeDescription;
+  final isNatal = config.featureKey == AiReportFeatureKeys.bazi ||
+      config.featureKey == AiReportFeatureKeys.ziweiDoushu ||
+      config.featureKey == AiReportFeatureKeys.tiebanShenshu;
+  String? timeDescription = isNatal ? null : '起卦时间：原始记录未提供。';
   try {
     final decoded = jsonDecode(source);
     if (decoded is Map<String, dynamic>) {
@@ -19,7 +22,7 @@ String buildAiReportUserPrompt({
         ..remove('aiReports')
         ..remove('interpretation');
       final rawTime = data['castTimeUtc'] ?? data['createdAt'];
-      if (rawTime is String) {
+      if (!isNatal && rawTime is String) {
         final time = DateTime.tryParse(rawTime);
         final hasZone = RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(rawTime);
         if (time != null && hasZone) {
@@ -27,7 +30,7 @@ String buildAiReportUserPrompt({
           final display = beijing.toIso8601String().replaceFirst('Z', '');
           timeDescription = '原始起卦时间：$display+08:00（北京时间 UTC+8，不作真太阳时换算）。';
         } else {
-          timeDescription = '原始记录时间：$rawTime；旧记录未保存可靠时区，不据此臆定日辰、月建或精确应期。';
+          timeDescription = '原始记录时间：$rawTime；旧记录未保存可靠时区。';
         }
       }
       source = jsonEncode(data);
@@ -36,12 +39,11 @@ String buildAiReportUserPrompt({
     // Natal pages already provide a labelled plain-text birth/chart summary.
   }
   return [
-    '功能：${config.featureKey}；报告类型：${config.reportType}。',
+    config.featureName,
     '所问之事或关注方向：$focus',
-    '篇幅：${config.minWords}-${config.maxWords} 字。',
-    AiReportPromptTemplates.templates[config.promptTemplateId] ?? '',
     if (timeDescription != null) timeDescription,
-    '以下为原始资料，请据此解读：',
+    '原始资料：',
     source,
+    '请解读。',
   ].join('\n');
 }

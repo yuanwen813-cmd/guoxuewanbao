@@ -39,6 +39,7 @@ class _TakashimaPageState extends ConsumerState<TakashimaPage> {
   // ignore: unused_field
   int _leftCount = 0, _rightCount = 0;
   TakashimaCastResult? _castResult;
+  DateTime? _castTime;
   GuoxueResult? _result;
   // ignore: unused_field
   bool _interpreting = false;
@@ -283,6 +284,7 @@ class _TakashimaPageState extends ConsumerState<TakashimaPage> {
 
   void _finishCast() {
     final q = _questionController.text.trim();
+    _castTime = DateTime.now();
     _castResult =
         _engine.buildResult(question: q, gender: _gender, shakes: _shakes);
     _result = _buildLocalResult(_castResult!);
@@ -295,6 +297,7 @@ class _TakashimaPageState extends ConsumerState<TakashimaPage> {
       _leftCount = 0;
       _rightCount = 0;
       _castResult = null;
+      _castTime = null;
       _result = null;
       _aiSystemPrompt = null;
       _aiUserPrompt = null;
@@ -379,7 +382,7 @@ class _TakashimaPageState extends ConsumerState<TakashimaPage> {
         featureId: 'takashima',
         featureTitle: '高岛易断',
         categoryId: 'divination',
-        createdAt: DateTime.now(),
+        createdAt: _castTime!,
         sections: sections,
         rawData: cr.toJson());
   }
@@ -718,7 +721,7 @@ class _TakashimaPageState extends ConsumerState<TakashimaPage> {
         featureName: '高岛易断',
         categoryId: 'divination',
         userQuestion: cr.question.isNotEmpty ? cr.question : null,
-        createdAt: DateTime.now(),
+        createdAt: _castTime!,
         summary: summary,
         type: DivinationType.hexagram,
         primaryHexagram: HexagramCard(

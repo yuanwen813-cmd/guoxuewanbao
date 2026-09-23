@@ -45,6 +45,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   final Map<String, String> _errors = {};
   final Map<String, String> _reportIds = {};
   final Map<String, String> _feedback = {};
+  final Map<String, AiReportProductConfig> _savedConfigs = {};
   final Set<String> _legacyEmptyResponseProducts = {};
   String? _loadingProductId;
 
@@ -84,16 +85,29 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
 
   void _applyInitialReports() {
     _legacyEmptyResponseProducts.clear();
+    final configs = AiReportProductCatalog.forFeature(widget.featureKey);
+    if (configs.isEmpty) return;
+    final current = configs.single;
     for (final report in widget.initialReports) {
+      if (report.featureKey.isNotEmpty && report.featureKey != widget.featureKey) {
+        continue;
+      }
       final text = report.text.trim();
       if (_isEmptyResponsePlaceholder(text)) {
-        _legacyEmptyResponseProducts.add(report.productId);
-        _answers.remove(report.productId);
-        _reportIds.remove(report.productId);
-        _errors[report.productId] = '上一次 AI 未返回有效内容，正在核对退款。';
+        _legacyEmptyResponseProducts.add(current.id);
+        _errors[current.id] = '上一次 AI 未返回有效内容，正在核对退款。';
         continue;
       }
       if (report.productId.isNotEmpty && text.isNotEmpty) {
+        _savedConfigs[report.productId] = AiReportProductConfig(
+          id: report.productId,
+          featureKey: current.featureKey,
+          featureName: current.featureName,
+          reportType: report.reportType,
+          buttonTitle: report.title.isEmpty ? '已保存的 AI 解析' : report.title,
+          priceLabel: report.priceLabel,
+          buttonSubtitle: '已保存，可免费复看',
+        );
         _answers.putIfAbsent(report.productId, () => text);
         if (report.reportId?.trim().isNotEmpty == true) {
           _reportIds.putIfAbsent(report.productId, () => report.reportId!);
@@ -134,6 +148,11 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   Widget build(BuildContext context) {
     final configs = AiReportProductCatalog.forFeature(widget.featureKey);
     if (configs.isEmpty) return const SizedBox.shrink();
+    final savedConfigs = {
+      for (final config in configs) config.id: config,
+      ..._savedConfigs,
+    }.values.where((config) => _answers[config.id]?.isNotEmpty == true).toList();
+    final visibleConfigs = savedConfigs.isEmpty ? configs : savedConfigs;
     final wallet = ref.watch(walletStoreProvider);
     final focusOptional = _focusOptional;
 
@@ -171,8 +190,8 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
           const SizedBox(height: 8),
           Text(
             focusOptional
-                ? '可选择重点了解的方向；不填写时，AI 将按整体命盘详解生成报告。AI 只读取当前页面已经生成的结构化结果，不重新排盘。'
-                : '请先输入想重点了解的事项。AI 只读取当前页面已经生成的结构化结果，不重新排盘、不重新起卦。',
+                ? '想重点了解的方向可留空，默认解读整体命盘。'
+                : '所问事项将与卦象和原始起卦时间一起提交。',
             style: GuoXueTypography.caption.copyWith(
               color: GuoXueColors.inkGray,
               letterSpacing: 0,
@@ -221,7 +240,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
             ),
           ),
           const SizedBox(height: 12),
-          for (final config in configs)
+          for (final config in visibleConfigs)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _AiReportProductTile(
@@ -248,7 +267,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   }
 
   Future<void> _generateReport(AiReportProductConfig config) async {
-    if (_loadingProductId != null || _answers[config.id]?.isNotEmpty == true) {
+    if (_loadingProductId != null || _answers.values.any((text) => text.isNotEmpty)) {
       return;
     }
     final auth = ref.read(authStoreProvider);
@@ -454,15 +473,6 @@ class _AiReportProductTile extends StatelessWidget {
                         color: GuoXueColors.inkGray,
                         letterSpacing: 0,
                         height: 1.35,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${config.minWords}-${config.maxWords} 字 · 服务端扣费',
-                      style: GuoXueTypography.caption.copyWith(
-                        color: GuoXueColors.inkLight,
-                        letterSpacing: 0,
-                        fontSize: 11,
                       ),
                     ),
                   ],

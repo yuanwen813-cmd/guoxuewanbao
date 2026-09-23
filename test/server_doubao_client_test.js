@@ -32,8 +32,9 @@ async function run() {
     assert.equal(config.baseUrl, 'https://ark.cn-beijing.volces.com/api/v3');
     assert.equal(config.timeoutMs, 270000);
     const prompt = buildAiReportSystemPrompt('must not become a system rule');
-    assert.ok(!prompt.includes('must not become a system rule'));
-    assert.ok(prompt.includes('先给结论'));
+    assert.equal(prompt, '');
+    process.env.AI_REPORT_SYSTEM_PROMPT = 'legacy rules must not be sent';
+    assert.equal(buildAiReportSystemPrompt('client rules'), '');
 
     let calls = 0;
     const answer = '## 判断\n按卦理倾向不成。\n\n| 依据 | 内容 |\n| --- | --- |\n| 动爻 | 说明 |';
@@ -71,6 +72,19 @@ async function run() {
     assert.equal(result.model, config.model);
     assert.deepEqual(result.usage, { prompt_tokens: 30, completion_tokens: 50, total_tokens: 80 });
     assert.equal(calls, 1);
+
+    for (const systemPrompt of [undefined, '', '   ']) {
+      global.fetch = async (_url, options) => {
+        const body = JSON.parse(options.body);
+        assert.deepEqual(body.input, [{
+          role: 'user', content: [{ type: 'input_text', text: '起卦时间：2026-09-21 09:55 UTC+8，请解读。' }],
+        }]);
+        assert.equal(body.max_output_tokens, undefined);
+        return { ok: true, json: async () => successfulResponse };
+      };
+      const direct = await callDoubao({ systemPrompt, userPrompt: '起卦时间：2026-09-21 09:55 UTC+8，请解读。' });
+      assert.equal(direct.answer, answer);
+    }
 
     global.fetch = async () => ({ ok: true, json: async () => ({
       status: 'completed',
@@ -125,7 +139,12 @@ async function run() {
         debits += 1;
         return { order: { id: 'test-order' } };
       },
-      callDoubao: async () => { providerCalls += 1; return { answer, model: product.model }; },
+      callDoubao: async ({ systemPrompt, userPrompt }) => {
+        assert.equal(systemPrompt, '');
+        assert.equal(userPrompt, '测试问题');
+        providerCalls += 1;
+        return { answer, model: product.model };
+      },
       completeAiReport: async ({ resultText }) => {
         savedText = resultText;
         return { order: { id: 'test-order' }, wallet: { balanceCents: 500 } };
@@ -133,7 +152,7 @@ async function run() {
       refundAiReport: async () => { refunds += 1; return { order: {}, wallet: {} }; },
       recordServiceEventQuietly: () => {},
     };
-    const body = { productId: product.id, expectedPriceCents: 500, userPrompt: '测试问题' };
+    const body = { productId: product.id, expectedPriceCents: 500, userPrompt: '测试问题', systemPrompt: 'client formatting rules' };
     const generated = await generateAiReport({ userId: 'test-user', body, dependencies });
     assert.equal(savedText, generated.answer);
     assert.ok(generated.answer.startsWith('解卦为传统民俗文化内容，不能当作将发生的事实，仅作娱乐参考。'));

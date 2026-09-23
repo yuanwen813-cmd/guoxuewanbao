@@ -197,7 +197,7 @@ class _MeihuaYiPageState extends ConsumerState<MeihuaYiPage> {
   }
 
   void _saveToHistory() {
-    final cr = _buildCommonResult();
+    final cr = _commonResult ?? _buildCommonResult();
     final record = DivinationHistory(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         featureId: cr.featureId,

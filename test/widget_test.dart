@@ -24,7 +24,7 @@ import 'package:guoxueapp/infrastructure/history_service/history_service.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('AI report product catalog exposes final report tiers', () {
+  test('AI report product catalog exposes one five-yuan option per feature', () {
     final daily = AiReportProductCatalog.forFeature(
       AiReportFeatureKeys.dailyHexagram,
     );
@@ -40,10 +40,10 @@ void main() {
     );
 
     expect(daily.length, 1);
-    expect(ask.length, 2);
-    expect(bazi.length, 3);
-    expect(ziwei.length, 3);
-    expect(tieban.length, 2);
+    expect(ask.length, 1);
+    expect(bazi.length, 1);
+    expect(ziwei.length, 1);
+    expect(tieban.length, 1);
     for (final product in AiReportProductCatalog.all) {
       expect(product.priceTier, 'flat_5');
       expect(product.priceCents, 500);
@@ -51,11 +51,9 @@ void main() {
       expect(product.buttonTitle, startsWith('¥5 '));
       expect(product.modelId, AiReportModelIds.doubaoSeed21Pro);
       expect(product.enabled, isTrue);
+      expect(AiReportProductCatalog.forFeature(product.featureKey), hasLength(1));
+      expect(product.buttonTitle, '¥5 AI 解析');
     }
-    expect(
-      bazi.firstWhere((item) => item.id == 'bazi_deep_6_9').maxWords,
-      12000,
-    );
     expect(AiReportProductCatalog.byId('bazi_custom_13_9'), isNull);
     expect(AiReportProductCatalog.byId('ziwei_premium'), isNull);
     expect(AiReportProductCatalog.byId('tieban_premium'), isNull);
@@ -211,7 +209,7 @@ void main() {
     );
     expect(
       find.byKey(const Key('ai_report_coin_hexagram_question_brief')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const Key('ai_report_coin_hexagram_question_full')),
@@ -285,13 +283,13 @@ void main() {
 
     expect(find.text('想重点了解的方向（可选）'), findsOneWidget);
     expect(find.textContaining('不填写则生成整体命盘详解'), findsWidgets);
-    expect(find.byKey(const Key('ai_report_bazi_brief_1')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_bazi_brief_1')), findsNothing);
     expect(find.byKey(const Key('ai_report_bazi_basic_3_9')), findsOneWidget);
-    expect(find.byKey(const Key('ai_report_bazi_deep_6_9')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_bazi_deep_6_9')), findsNothing);
     expect(find.byKey(const Key('ai_report_bazi_custom_13_9')), findsNothing);
     expect(find.textContaining('¥13.9'), findsNothing);
 
-    await tester.tap(find.byKey(const Key('ai_report_bazi_brief_1')));
+    await tester.tap(find.byKey(const Key('ai_report_bazi_basic_3_9')));
     await tester.pumpAndSettle();
 
     expect(find.text('请先输入想重点了解的事项。'), findsNothing);
@@ -324,18 +322,14 @@ void main() {
 
     expect(find.text('铁板神数结果'), findsOneWidget);
     expect(find.byKey(const Key('ai_report_tieban_basic')), findsOneWidget);
-    expect(find.byKey(const Key('ai_report_tieban_deep')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_tieban_deep')), findsNothing);
     expect(find.byKey(const Key('ai_report_tieban_premium')), findsNothing);
     expect(find.textContaining('¥13.9'), findsNothing);
 
     final basicButton = tester.widget<FilledButton>(
       find.byKey(const Key('ai_report_tieban_basic')),
     );
-    final deepButton = tester.widget<FilledButton>(
-      find.byKey(const Key('ai_report_tieban_deep')),
-    );
     expect(basicButton.onPressed, isNotNull);
-    expect(deepButton.onPressed, isNotNull);
   });
 
   testWidgets('ziwei can generate result from saved birth profile',
@@ -364,16 +358,16 @@ void main() {
     await tester.pump();
 
     expect(find.text('紫微斗数命盘'), findsOneWidget);
-    expect(find.byKey(const Key('ai_report_ziwei_brief')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_ziwei_brief')), findsNothing);
     expect(find.byKey(const Key('ai_report_ziwei_basic')), findsOneWidget);
-    expect(find.byKey(const Key('ai_report_ziwei_deep')), findsOneWidget);
+    expect(find.byKey(const Key('ai_report_ziwei_deep')), findsNothing);
     expect(find.byKey(const Key('ai_report_ziwei_premium')), findsNothing);
     expect(find.textContaining('¥13.9'), findsNothing);
 
-    final briefButton = tester.widget<FilledButton>(
-      find.byKey(const Key('ai_report_ziwei_brief')),
+    final basicButton = tester.widget<FilledButton>(
+      find.byKey(const Key('ai_report_ziwei_basic')),
     );
-    expect(briefButton.onPressed, isNotNull);
+    expect(basicButton.onPressed, isNotNull);
   });
 
   testWidgets('apk download page exposes android package link', (tester) async {
@@ -423,7 +417,7 @@ void main() {
     await tester.pump();
 
     await tester.tap(
-      find.byKey(const Key('ai_report_coin_hexagram_question_brief')),
+      find.byKey(const Key('ai_report_coin_hexagram_question_full')),
     );
     await tester.pump();
 

@@ -42,7 +42,9 @@ async function callDoubao({ systemPrompt, userPrompt, config = getDoubaoConfig()
         model: config.model,
         store: false,
         input: [
-          { role: 'system', content: [{ type: 'input_text', text: systemPrompt }] },
+          ...(systemPrompt?.trim() ? [
+            { role: 'system', content: [{ type: 'input_text', text: systemPrompt }] },
+          ] : []),
           { role: 'user', content: [{ type: 'input_text', text: userPrompt }] },
         ],
       }),
