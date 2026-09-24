@@ -3,6 +3,7 @@ const { getAiProduct } = require('./productCatalog');
 const {
   completeAiReport,
   createAiReportDebit,
+  createQueuedAiReportDebit,
   getAiReportForUser,
   reconcileEmptyAiReportsForUser,
   refundAiReport,
@@ -116,6 +117,23 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
   const promptSnapshot = [title, systemPrompt, userPrompt].join('\n\n');
   const providerConfig = dependencies.callDoubao ? undefined : getDoubaoConfig();
 
+  if (process.env.AI_LONG_REPORTS_ENABLED === 'true'
+      && /^(bazi|ziwei|tieban)_/.test(product.reportType)) {
+    const queueReport = dependencies.createQueuedAiReportDebit || createQueuedAiReportDebit;
+    const queued = await queueReport({
+      userId, product, inputSnapshotJson, baziChartJson, questionResultJson,
+      promptSnapshot, userPrompt, systemPrompt,
+    });
+    return {
+      pending: true,
+      answer: '',
+      model: providerConfig?.model || product.model,
+      report: queued.order,
+      wallet: queued.wallet,
+      alreadyPending: queued.alreadyPending,
+    };
+  }
+
   const debit = await debitReport({
     userId,
     product,
@@ -172,6 +190,7 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
       {
         wallet: refunded.wallet,
         report: refunded.order,
+        refunded: true,
       },
     );
   }

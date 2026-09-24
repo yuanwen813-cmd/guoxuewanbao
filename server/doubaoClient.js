@@ -51,7 +51,12 @@ async function callDoubao({ systemPrompt, userPrompt, config = getDoubaoConfig()
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data?.error) {
-      // Provider responses can contain configuration details; never forward them.
+      // Keep only the provider's diagnostic code and request ID in server logs.
+      const providerCode = String(data?.error?.code || '').slice(0, 80);
+      const requestId = String(response.headers?.get?.('x-request-id') || '').slice(0, 100);
+      console.warn('Ark response failed', {
+        status: response.status || 502, providerCode, requestId,
+      });
       throw new HttpError(502, '豆包服务暂时不可用，请稍后再试');
     }
     const messages = Array.isArray(data?.output)
@@ -90,4 +95,108 @@ async function callDoubao({ systemPrompt, userPrompt, config = getDoubaoConfig()
   }
 }
 
-module.exports = { callDoubao, getDoubaoConfig, getDoubaoModelId };
+async function callDoubaoStream({ systemPrompt, userPrompt, config = getDoubaoConfig() }) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.timeoutMs);
+  try {
+    const response = await fetch(`${config.baseUrl}/responses`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
+      body: JSON.stringify({
+        model: config.model,
+        store: false,
+        stream: true,
+        input: [
+          ...(systemPrompt?.trim() ? [
+            { role: 'system', content: [{ type: 'input_text', text: systemPrompt }] },
+          ] : []),
+          { role: 'user', content: [{ type: 'input_text', text: userPrompt }] },
+        ],
+      }),
+    });
+    if (!response.ok) {
+      const providerCode = String((await response.json().catch(() => ({})))?.error?.code || '').slice(0, 80);
+      console.warn('Ark stream failed', {
+        status: response.status || 502,
+        providerCode,
+        requestId: String(response.headers?.get?.('x-request-id') || '').slice(0, 100),
+      });
+      throw new HttpError(502, '豆包服务暂时不可用，请稍后再试');
+    }
+    if (!response.body) throw new HttpError(502, 'AI 服务未返回数据流');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let pending = '';
+    let completed = null;
+    let streamError = false;
+    const deltas = [];
+    const handleEvent = (frame) => {
+      const payload = frame.split(/\r?\n/)
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart()).join('\n');
+      if (!payload || payload === '[DONE]') return;
+      let event;
+      try { event = JSON.parse(payload); } catch (_) { throw new HttpError(502, 'AI 数据流格式错误'); }
+      const type = event.type;
+      if (type === 'response.output_text.delta' && typeof event.delta === 'string') {
+        deltas.push(event.delta);
+      } else if (type === 'response.completed') {
+        completed = event.response || null;
+      } else if (type === 'response.failed' || type === 'response.incomplete' || type === 'error') {
+        streamError = true;
+      }
+    };
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      pending += decoder.decode(value, { stream: true });
+      if (pending.length > 4 * 1024 * 1024) throw new HttpError(502, 'AI 数据流过大');
+      const frames = pending.split(/\r?\n\r?\n/);
+      pending = frames.pop();
+      for (const frame of frames) handleEvent(frame);
+    }
+    pending += decoder.decode();
+    if (pending.trim()) handleEvent(pending);
+    if (streamError || completed?.status !== 'completed' || completed?.incomplete_details) {
+      throw new HttpError(424, 'AI 报告未完整生成，请稍后重试');
+    }
+    const messages = Array.isArray(completed.output)
+      ? completed.output.filter((item) => item?.type === 'message' && item.role === 'assistant')
+      : [];
+    const content = messages.flatMap((item) => Array.isArray(item.content) ? item.content : []);
+    if (content.some((part) => part?.type === 'refusal')) {
+      throw new HttpError(424, 'AI 暂时无法解析此内容，请调整问题后重试');
+    }
+    if (messages.some((item) => item.status && item.status !== 'completed')) {
+      throw new HttpError(424, 'AI 报告未完整生成，请稍后重试');
+    }
+    const finalText = content.filter((part) => part?.type === 'output_text' && typeof part.text === 'string')
+      .map((part) => part.text).join('\n\n').trim();
+    const answer = finalText || deltas.join('').trim();
+    if (!answer) throw new HttpError(424, 'AI 服务未返回有效内容');
+    const tokenCount = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null;
+    return {
+      answer,
+      model: completed.model || config.model,
+      usage: {
+        prompt_tokens: tokenCount(completed.usage?.input_tokens),
+        completion_tokens: tokenCount(completed.usage?.output_tokens),
+        total_tokens: tokenCount(completed.usage?.total_tokens),
+      },
+    };
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    if (controller.signal.aborted) throw new HttpError(504, 'AI 解析超时，请稍后重试');
+    throw new HttpError(502, 'AI 服务连接失败，请稍后再试');
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+module.exports = { callDoubao, callDoubaoStream, getDoubaoConfig, getDoubaoModelId };

@@ -44,17 +44,25 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   final Map<String, String> _answers = {};
   final Map<String, String> _errors = {};
   final Map<String, String> _reportIds = {};
+  final Map<String, String> _pendingReportIds = {};
+  final Map<String, String> _pendingFocus = {};
   final Map<String, String> _feedback = {};
   final Map<String, AiReportProductConfig> _savedConfigs = {};
   final Set<String> _legacyEmptyResponseProducts = {};
+  Timer? _reportPoll;
   String? _loadingProductId;
+  String? _visibleUserId;
 
   @override
   void initState() {
     super.initState();
+    _visibleUserId = ref.read(authStoreProvider).user?.id;
     _applyInitialFocus();
     _applyInitialReports();
     unawaited(_recoverLegacyEmptyResponses());
+    _reportPoll = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (_pendingReportIds.isNotEmpty) unawaited(_refreshPendingReports());
+    });
   }
 
   @override
@@ -72,8 +80,58 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
 
   @override
   void dispose() {
+    _reportPoll?.cancel();
     _focusController.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshPendingReports() async {
+    final userId = ref.read(authStoreProvider).user?.id;
+    final api = ServerWalletApi(
+      tokenProvider: () async => ref.read(authStoreProvider).token,
+    );
+    for (final entry in Map<String, String>.from(_pendingReportIds).entries) {
+      try {
+        final report = await api.fetchAiReportDetail(entry.value);
+        if (!mounted || ref.read(authStoreProvider).user?.id != userId ||
+            _pendingReportIds[entry.key] != entry.value) continue;
+        if (report.status == 'generating') continue;
+        final focus = _pendingFocus.remove(entry.key) ?? _defaultDestinyFocus;
+        setState(() {
+          _pendingReportIds.remove(entry.key);
+          if (report.status == 'completed' &&
+              report.resultText?.trim().isNotEmpty == true) {
+            _answers[entry.key] = report.resultText!.trim();
+            _reportIds[entry.key] = report.id;
+          } else {
+            _errors[entry.key] = report.status == 'refunded'
+                ? '本次解析未完成，¥5 已自动退回钱包。你可以重新解析。'
+                : '报告未生成，请稍后重试。';
+          }
+        });
+        if (report.status == 'completed' &&
+            report.resultText?.trim().isNotEmpty == true) {
+          final config = AiReportProductCatalog.forFeature(widget.featureKey).first;
+          widget.onReportGenerated?.call(AiReportSnapshot(
+            productId: config.id,
+            featureKey: config.featureKey,
+            title: config.buttonTitle,
+            reportType: config.reportType,
+            priceLabel: config.priceLabel,
+            text: report.resultText!.trim(),
+            model: '',
+            reportId: report.id,
+            focus: focus,
+            createdAt: DateTime.now(),
+          ));
+        }
+        if (report.status == 'refunded') {
+          await ref.read(walletStoreProvider.notifier).syncFromServer();
+        }
+      } catch (_) {
+        // Keep the pending report ID so the next poll can retry safely.
+      }
+    }
   }
 
   void _applyInitialFocus() {
@@ -146,6 +204,21 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AuthState>(authStoreProvider, (_, next) {
+      if (_visibleUserId == next.user?.id) return;
+      setState(() {
+        _visibleUserId = next.user?.id;
+        _answers.clear();
+        _errors.clear();
+        _reportIds.clear();
+        _pendingReportIds.clear();
+        _pendingFocus.clear();
+        _feedback.clear();
+        _savedConfigs.clear();
+        _legacyEmptyResponseProducts.clear();
+        _loadingProductId = null;
+      });
+    });
     final configs = AiReportProductCatalog.forFeature(widget.featureKey);
     if (configs.isEmpty) return const SizedBox.shrink();
     final savedConfigs = {
@@ -250,8 +323,10 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
                 answer: _answers[config.id],
                 error: _errors[config.id],
                 reportId: _reportIds[config.id],
+                pending: _pendingReportIds.containsKey(config.id),
                 feedback: _feedback[config.id],
                 onGenerate: () => _generateReport(config),
+                onOpenReports: () => context.push('/my-reports'),
                 onFeedback: (rating) => _submitFeedback(config.id, rating),
               ),
             ),
@@ -278,6 +353,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
       context.push('/login');
       return;
     }
+    final userId = auth.user!.id;
 
     if (!config.enabled) {
       setState(() {
@@ -313,7 +389,16 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
                 temperature: 0.45,
                 sourceJson: widget.sourceJson,
               );
-      if (!mounted) return;
+      if (!mounted || ref.read(authStoreProvider).user?.id != userId) return;
+      if (result.pending) {
+        setState(() {
+          if (result.reportId != null) {
+            _pendingReportIds[config.id] = result.reportId!;
+            _pendingFocus[config.id] = focus;
+          }
+        });
+        return;
+      }
       final answer = result.answer.trim();
       if (answer.isEmpty) {
         try {
@@ -322,7 +407,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
           // The server is responsible for the refund; preserve a retry path
           // even when the balance refresh is temporarily unavailable.
         }
-        if (!mounted) return;
+        if (!mounted || ref.read(authStoreProvider).user?.id != userId) return;
         setState(() {
           _answers.remove(config.id);
           _errors[config.id] = 'AI 未返回有效内容，请在钱包流水核对退款后重新解析。';
@@ -350,22 +435,25 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
         ),
       );
     } on ServerWalletException catch (error) {
+      if (!mounted || ref.read(authStoreProvider).user?.id != userId) return;
       if (error.wallet != null) {
         await ref
             .read(walletStoreProvider.notifier)
             .replaceFromServer(error.wallet!);
       }
-      if (!mounted) return;
+      if (!mounted || ref.read(authStoreProvider).user?.id != userId) return;
       setState(() {
         _errors[config.id] = error.statusCode == 402
             ? '${error.message}。请先充值后再生成。'
             : error.message;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || ref.read(authStoreProvider).user?.id != userId) return;
       setState(() => _errors[config.id] = 'AI 报告生成失败，请稍后再试。');
     } finally {
-      if (mounted) setState(() => _loadingProductId = null);
+      if (mounted && ref.read(authStoreProvider).user?.id == userId) {
+        setState(() => _loadingProductId = null);
+      }
     }
   }
 
@@ -419,8 +507,10 @@ class _AiReportProductTile extends StatelessWidget {
   final String? answer;
   final String? error;
   final String? reportId;
+  final bool pending;
   final String? feedback;
   final VoidCallback onGenerate;
+  final VoidCallback onOpenReports;
   final ValueChanged<String> onFeedback;
 
   const _AiReportProductTile({
@@ -430,8 +520,10 @@ class _AiReportProductTile extends StatelessWidget {
     required this.answer,
     required this.error,
     required this.reportId,
+    required this.pending,
     required this.feedback,
     required this.onGenerate,
+    required this.onOpenReports,
     required this.onFeedback,
   });
 
@@ -482,7 +574,7 @@ class _AiReportProductTile extends StatelessWidget {
               FilledButton.icon(
                 key: Key('ai_report_${config.id}'),
                 onPressed:
-                    busy || !config.enabled || hasAnswer ? null : onGenerate,
+                    busy || pending || !config.enabled || hasAnswer ? null : onGenerate,
                 icon: loading
                     ? const SizedBox(
                         width: 16,
@@ -495,7 +587,7 @@ class _AiReportProductTile extends StatelessWidget {
                 label: Text(
                   loading
                       ? '生成中'
-                      : (hasAnswer ? '已生成' : (canRetry ? '重新解析' : '生成报告')),
+                      : (pending ? '生成中' : hasAnswer ? '已生成' : (canRetry ? '重新解析' : '生成报告')),
                 ),
               ),
             ],
@@ -510,6 +602,15 @@ class _AiReportProductTile extends StatelessWidget {
                 color: GuoXueColors.inkGray,
                 letterSpacing: 0,
               ),
+            ),
+          ],
+          if (pending) ...[
+            const SizedBox(height: 10),
+            const Text('报告正在生成，完成后可在“我的报告”查看。此订单不会重复扣费。'),
+            TextButton.icon(
+              onPressed: onOpenReports,
+              icon: const Icon(Icons.description_outlined),
+              label: const Text('查看我的报告'),
             ),
           ],
           if (error != null) ...[

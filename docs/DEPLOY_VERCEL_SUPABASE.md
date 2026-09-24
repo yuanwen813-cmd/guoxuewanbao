@@ -256,9 +256,20 @@ ARK_TIMEOUT_MS=270000
 - 新起卦结果额外保存 UTC 时间，AI 请求附上换算后的完整北京时间，不使用报告请求时间替代。
 - 高岛易断在成卦时固定时间，页面重建不重取当前时间；梅花易数保存历史时复用已生成结果。命盘请求保留出生资料，不把报告生成时间当作起卦时间。
 - 新历史记录保留六爻结构区块；旧记录没有的内容不伪造，旧时间缺少时区时明确注明不足。排盘/起卦算法不变。
-- AI 等待时间单独延长到 330 秒；服务端模型请求最多 270 秒，为保存或退款留出时间，其他钱包请求超时不变。
-- vercel.json 设置函数最长 300 秒，部署时需要核实已开启 Fluid Compute 且项目支持该上限，参见 [Vercel 官方时长说明](https://vercel.com/docs/functions/configuring-functions/duration)。
-- 这仍是同步请求，不是后台任务。平台提前终止、断网或数据库退款失败仍需核对订单和流水；不能仅凭前端超时认定已退款。模型自然输出的长报告能否在上限内完成需联调验证。
+- 问事等短报告仍走原有同步请求（前端最多等待 330 秒，服务端最多调用模型 270 秒）。Vercel Hobby 函数的上限不能靠提高客户端超时突破，参见 [Vercel 官方时长说明](https://vercel.com/docs/functions/configuring-functions/duration)。
+- 八字、紫微斗数、铁板神数在启用 `AI_LONG_REPORTS_ENABLED` 后改为数据库排队：扣费与建任务同一事务，Vercel 立即返回订单，独立 Node 执行器流式调用方舟，完成后保存全文；失败则同一事务退款并结算任务。用户可在“我的报告”复看或查看退款状态。
+- 流式中间片段不作为付费结果。必须收到完整完成事件并有正文才保存；否则退款。长任务单次模型调用上限默认 30 分钟，不因此限制报告字数。数据库租约与认领令牌阻止失效执行器写入；同一用户同一产品的重复请求不会重复扣费。排队超过 30 分钟或运行超过 75 分钟且租约失效时，执行器或用户查询会触发兜底退款。
+
+### 长报告执行器部署（启用前必做）
+
+1. 在现有 Supabase 项目 SQL Editor **单独执行** `supabase/ai_report_jobs.sql`。此脚本建立 `ai_report_jobs` 和任务 RPC；不要因此重建钱包或清空现有报告。
+2. 准备一台可持续运行 Node 20+ 的独立服务器/后台服务。Vercel Serverless 只负责 API，**不能**把常驻执行器放进 Vercel Function。执行器需要部署同一份代码，安装依赖后以 `npm run worker:ai` 作为启动命令，设置自动重启与单实例监控；不要求 PM2/Nginx。
+3. 只在服务端环境配置 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`、`ARK_API_KEY`、`ARK_BASE_URL`、`ARK_MODEL_ID`。执行器可以设 `ARK_LONG_TIMEOUT_MS=1800000` 和 `AI_WORKER_POLL_MS=5000`。服务角色密钥和方舟 Key 绝不可进入 Flutter 构建参数或公开仓库。
+4. 先在 Vercel **保持** `AI_LONG_REPORTS_ENABLED=false` 部署新代码并确认旧链路正常；启动执行器，确认 `ai_report_worker_status.last_seen_at` 持续刷新且数据库 RPC 无报错后，再把 Vercel 的该变量设为 `true` 并重新部署。执行器超过 90 秒没有心跳时，新命盘报告会在扣费前拒绝；极端情况下执行器在扣费后离线，超期任务仍按上文规则退款。
+5. 用测试账号做一笔 5 元命盘报告：创建接口应返回 202 和 `generating`；离开页面后从“我的报告”能看到状态；完成后全文可免费复看且流水只有一笔扣费。用模拟失败验证一笔退款。不要用真实用户的付费订单做破坏性测试。
+6. 在 Supabase SQL Editor 监看任务：`select status, count(*) from ai_report_jobs group by status;`，并核对 `ai_report_orders` 与 `wallet_transactions`。出现长时间 `queued`、租约过期或“扣费无任务”时，先停止开启新请求并核查执行器日志与数据库迁移。执行器日志只保留订单 ID、状态码与方舟 Request ID，不记录提示词或密钥。
+
+没有独立执行器和数据库迁移时，**不要启用** `AI_LONG_REPORTS_ENABLED`；本地测试通过不等于公网长报告已修复。原有 270 秒同步超时仍可能发生，但失败订单会按现有流程退款。
 
 ### 联调与测试
 

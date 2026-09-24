@@ -334,6 +334,49 @@ async function createAiReportDebit({
   };
 }
 
+async function createQueuedAiReportDebit({
+  userId,
+  product,
+  inputSnapshotJson,
+  baziChartJson,
+  questionResultJson,
+  promptSnapshot,
+  userPrompt,
+  systemPrompt,
+  supabaseClient,
+}) {
+  const supabase = supabaseClient || getSupabaseServiceClient();
+  const { data, error } = await supabase.rpc('start_ai_report_job', {
+    p_user_id: userId,
+    p_product_id: product.id,
+    p_report_type: product.reportType,
+    p_price_cents: product.priceCents,
+    p_input_snapshot_json: inputSnapshotJson || {},
+    p_bazi_chart_json: baziChartJson || {},
+    p_question_result_json: questionResultJson || {},
+    p_prompt_snapshot: promptSnapshot || '',
+    p_user_prompt: userPrompt,
+    p_system_prompt: systemPrompt || '',
+  });
+  if (error) {
+    if (String(error.message || '').includes('INSUFFICIENT_BALANCE')) {
+      throw new HttpError(402, '余额不足，请先充值后再生成');
+    }
+    if (String(error.message || '').includes('AI_REPORT_ALREADY_GENERATING')) {
+      throw new HttpError(409, '已有同类命盘报告正在生成，请在“我的报告”查看完成后再提交');
+    }
+    if (String(error.message || '').includes('AI_WORKER_UNAVAILABLE')) {
+      throw new HttpError(503, '命盘解析服务暂未就绪，本次未扣费，请稍后再试');
+    }
+    throw new HttpError(503, '长报告服务暂不可用，本次未扣费');
+  }
+  return {
+    order: mapAiReportOrder(data.order),
+    wallet: mapWallet(data.wallet),
+    alreadyPending: Boolean(data.already_pending),
+  };
+}
+
 async function completeAiReport({
   orderId,
   resultText,
@@ -382,6 +425,12 @@ async function refundAiReport({
 
 async function getAiReportForUser({ userId, orderId }) {
   const supabase = getSupabaseServiceClient();
+  if (process.env.AI_LONG_REPORTS_ENABLED === 'true') {
+    const { error: expiryError } = await supabase.rpc('expire_ai_report_jobs', {
+      p_user_id: userId,
+    });
+    if (expiryError) throw new HttpError(503, '报告状态暂时无法确认，请稍后重试');
+  }
   const { data, error } = await supabase
     .from('ai_report_orders')
     .select('*')
@@ -392,9 +441,28 @@ async function getAiReportForUser({ userId, orderId }) {
   return mapAiReportOrder(data);
 }
 
+async function listAiReportsForUser(userId) {
+  const supabase = getSupabaseServiceClient();
+  if (process.env.AI_LONG_REPORTS_ENABLED === 'true') {
+    const { error: expiryError } = await supabase.rpc('expire_ai_report_jobs', {
+      p_user_id: userId,
+    });
+    if (expiryError) throw new HttpError(503, '报告状态暂时无法确认，请稍后重试');
+  }
+  const { data, error } = await supabase
+    .from('ai_report_orders')
+    .select('id, product_id, report_type, price_cents, status, error_message, created_at, updated_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw new HttpError(500, '报告列表读取失败');
+  return (data || []).map(mapAiReportOrder);
+}
+
 module.exports = {
   cancelRechargeOrderForUser,
   createAiReportDebit,
+  createQueuedAiReportDebit,
   completeAiReport,
   createRechargeOrder,
   grantRegistrationBonusIfEligible,
@@ -402,6 +470,7 @@ module.exports = {
   getRechargeOrderForUser,
   getWallet,
   isInvalidAiReportText,
+  listAiReportsForUser,
   reconcileEmptyAiReportsForUser,
   insertPaymentNotifyLog,
   listWalletTransactions,

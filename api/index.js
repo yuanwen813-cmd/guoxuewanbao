@@ -38,6 +38,7 @@ const {
   cancelRechargeOrderForUser,
   getRechargeOrderForUser,
   getWallet,
+  listAiReportsForUser,
   listWalletTransactions,
 } = require('../server/walletService');
 const {
@@ -338,8 +339,10 @@ const routes = {
       userId: current.appUser.id,
       body,
     });
-    sendJson(res, 200, {
+    sendJson(res, result.pending ? 202 : 200, {
       ok: true,
+      pending: Boolean(result.pending),
+      alreadyPending: Boolean(result.alreadyPending),
       answer: result.answer,
       model: result.model,
       report: result.report,
@@ -358,6 +361,12 @@ const routes = {
       ok: true,
       report,
     });
+  }),
+
+  'ai-report-list': handleApi(['GET'], async (req, res) => {
+    const current = await requireUser(req);
+    const reports = await listAiReportsForUser(current.appUser.id);
+    sendJson(res, 200, { ok: true, reports });
   }),
 
   'admin-auth-send-code': handleApi(['POST'], async (req, res) => {

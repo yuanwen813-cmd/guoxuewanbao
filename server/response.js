@@ -91,8 +91,13 @@ function handleApi(allowedMethods, handler) {
       await handler(req, res);
     } catch (error) {
       const statusCode = error.statusCode || 500;
-      const message =
-        statusCode >= 500 ? '服务端处理失败，请稍后再试' : error.message;
+      const refunded = error.details?.refunded === true
+        && error.details?.report?.status === 'refunded';
+      const message = refunded
+        ? (String(error.message || '').includes('解析超时')
+          ? 'AI 解析超时，本次费用已自动退回。请在钱包流水核对后重试。'
+          : 'AI 解析失败，本次费用已自动退回。请在钱包流水核对后重试。')
+        : statusCode >= 500 ? '服务端处理失败，请稍后再试' : error.message;
       const body = {
         ok: false,
         error: message,

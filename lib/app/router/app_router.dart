@@ -25,6 +25,7 @@ import '../../features/v2/natal_result_overview_page.dart';
 import '../../features/v2/natal_home_page.dart';
 import '../../features/v2/standalone_destiny_page.dart';
 import '../../features/wallet/wallet_page.dart';
+import '../../features/ai_reports/my_reports_page.dart';
 import '../../features/home/home_page.dart';
 import '../../features/history/history_detail_page.dart';
 import '../../features/history/history_page.dart';
@@ -143,6 +144,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/wallet',
         name: RouteNames.wallet,
         builder: (context, state) => const WalletPage(),
+      ),
+      GoRoute(
+        path: '/my-reports',
+        name: 'my-reports',
+        builder: (context, state) => const MyReportsPage(),
       ),
       GoRoute(
         path: '/settings/account-data',

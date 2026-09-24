@@ -360,6 +360,9 @@ async function deleteAccountData(userId, body) {
     if (message.includes('PENDING_RECHARGE_EXISTS')) {
       throw new HttpError(409, '仍有待支付充值订单，请先取消后再注销');
     }
+    if (message.includes('ACTIVE_AI_REPORT_EXISTS')) {
+      throw new HttpError(409, '仍有正在生成的 AI 报告，请等待完成或自动退款后再注销');
+    }
     throw new HttpError(500, '账户注销失败', error.message);
   }
   return data || { deleted: true };

@@ -172,6 +172,7 @@ class ServerWalletApi {
         answer: data['answer'] as String? ?? '',
         model: data['model'] as String? ?? '',
         reportId: (data['report'] as Map<String, dynamic>?)?['id'] as String?,
+        pending: data['pending'] == true,
         wallet: _walletFromResponse(data),
       );
     } on DioException catch (error) {
@@ -182,6 +183,35 @@ class ServerWalletApi {
         );
       }
       throw ServerWalletException.fromDio(error, wallet: wallet);
+    }
+  }
+
+  Future<List<ServerAiReport>> fetchAiReports() async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/ai-report-list', options: await _authOptions(),
+      );
+      final rows = response.data?['reports'];
+      return rows is List
+          ? rows.map((row) => ServerAiReport.fromJson(row as Map<String, dynamic>)).toList()
+          : const [];
+    } on DioException catch (error) {
+      throw ServerWalletException.fromDio(error);
+    }
+  }
+
+  Future<ServerAiReport> fetchAiReportDetail(String orderId) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/ai-report-detail',
+        queryParameters: {'orderId': orderId},
+        options: await _authOptions(),
+      );
+      return ServerAiReport.fromJson(
+        response.data?['report'] as Map<String, dynamic>? ?? const {},
+      );
+    } on DioException catch (error) {
+      throw ServerWalletException.fromDio(error);
     }
   }
 
@@ -223,6 +253,7 @@ class ServerAiReportResult {
   final String answer;
   final String model;
   final String? reportId;
+  final bool pending;
   final WalletState wallet;
 
   const ServerAiReportResult({
@@ -230,7 +261,35 @@ class ServerAiReportResult {
     required this.model,
     required this.wallet,
     this.reportId,
+    this.pending = false,
   });
+}
+
+class ServerAiReport {
+  final String id;
+  final String productId;
+  final String status;
+  final String? resultText;
+  final String? errorMessage;
+  final DateTime? createdAt;
+
+  const ServerAiReport({
+    required this.id,
+    required this.productId,
+    required this.status,
+    this.resultText,
+    this.errorMessage,
+    this.createdAt,
+  });
+
+  factory ServerAiReport.fromJson(Map<String, dynamic> json) => ServerAiReport(
+        id: json['id'] as String? ?? '',
+        productId: json['productId'] as String? ?? '',
+        status: json['status'] as String? ?? '',
+        resultText: json['resultText'] as String?,
+        errorMessage: json['errorMessage'] as String?,
+        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+      );
 }
 
 class RechargeCreateResult {

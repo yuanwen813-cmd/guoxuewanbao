@@ -363,12 +363,12 @@ class FeatureCatalogV2 {
     FeatureEntryV2(
       id: 'my_reports',
       title: '我的报告',
-      subtitle: '后续承接月报、年报和专项报告',
-      route: '/coming-soon/my-reports',
+      subtitle: '查看 AI 报告的生成进度与结果',
+      route: '/my-reports',
       icon: Icons.description_outlined,
       category: FeatureCategoryV2.mine,
-      status: FeatureStatusV2.comingSoon,
-      actionLabel: '占位',
+      status: FeatureStatusV2.stable,
+      actionLabel: '查看',
     ),
     FeatureEntryV2(
       id: 'settings',
