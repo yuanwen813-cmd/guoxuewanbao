@@ -49,7 +49,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('钱包充值')),
+      appBar: AppBar(title: const Text('积分充值')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -65,6 +65,8 @@ class _WalletPageState extends ConsumerState<WalletPage> {
               phone: auth.user?.phone,
               error: _pageError,
             ),
+            const SizedBox(height: 8),
+            const Text('1 元 = 1 积分'),
             const SizedBox(height: 18),
             _ProviderSelector(
               provider: _provider,
@@ -80,10 +82,10 @@ class _WalletPageState extends ConsumerState<WalletPage> {
                 runSpacing: 10,
                 children: [
                   for (final option in const [
-                    _RechargeOption(100, '¥1'),
-                    _RechargeOption(390, '¥3.9'),
-                    _RechargeOption(690, '¥6.9'),
-                    _RechargeOption(1390, '¥13.9'),
+                    _RechargeOption(1000, '¥10 · 10 积分'),
+                    _RechargeOption(2000, '¥20 · 20 积分'),
+                    _RechargeOption(5000, '¥50 · 50 积分'),
+                    _RechargeOption(10000, '¥100 · 100 积分'),
                   ])
                     OutlinedButton(
                       key: Key('wallet_recharge_${option.amountCents}'),
@@ -402,7 +404,7 @@ class _RechargeConfirmCard extends StatelessWidget {
           Text('确认充值信息', style: GuoXueTypography.h3),
           const SizedBox(height: 8),
           Text(
-            '支付方式：${_providerLabel(provider)}\n充值金额：${formatWalletCents(amountCents)}',
+            '支付方式：${_providerLabel(provider)}\n实付金额：${formatWalletCents(amountCents)}\n获得积分：${formatPointsCenti(amountCents)}',
             style: GuoXueTypography.caption.copyWith(
               color: GuoXueColors.inkGray,
               height: 1.5,
@@ -452,7 +454,7 @@ class _LoginRequiredCard extends StatelessWidget {
           Text('请先登录', style: GuoXueTypography.h2),
           const SizedBox(height: 8),
           Text(
-            '登录后才能查看服务端钱包余额、创建充值订单和生成 AI 报告。',
+            '登录后才能查看积分余额、创建充值订单和生成 AI 报告。',
             style: GuoXueTypography.caption.copyWith(
               color: GuoXueColors.inkGray,
               height: 1.4,
@@ -495,7 +497,7 @@ class _WalletSummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            phone == null ? '当前钱包余额' : '当前钱包余额 · $phone',
+            phone == null ? '积分余额' : '积分余额 · $phone',
             style: GuoXueTypography.caption.copyWith(
               color: GuoXueColors.inkGray,
               letterSpacing: 0,
@@ -503,7 +505,7 @@ class _WalletSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            formatWalletCents(wallet.balanceCents),
+            formatPointsCenti(wallet.balanceCents),
             key: const Key('wallet_balance_text'),
             style: GuoXueTypography.h1.copyWith(
               color: GuoXueColors.primary,
@@ -512,7 +514,7 @@ class _WalletSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '余额用于 AI 解析扣费。支付完成后以支付宝异步回调入账为准，前端支付成功不会直接增加余额。',
+            '积分用于 AI 解析。支付完成后以服务端异步回调入账为准，前端支付成功不会直接增加积分。',
             style: GuoXueTypography.caption.copyWith(
               color: GuoXueColors.inkGray,
               height: 1.4,
@@ -618,7 +620,8 @@ class _RechargeStatusCard extends StatelessWidget {
           Text(
             '支付方式：${_providerLabel(order.provider)}\n'
             '订单号：${order.outTradeNo}\n'
-            '金额：${formatWalletCents(order.amountCents)}\n'
+            '实付金额：${formatWalletCents(order.amountCents)}\n'
+            '获得积分：${formatPointsCenti(order.amountCents)}\n'
             '状态：${_statusLabel(order.status)}',
             style: GuoXueTypography.caption.copyWith(
               color: GuoXueColors.inkGray,
@@ -687,7 +690,7 @@ class _RechargeStatusCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    '微信 Native 支付会返回扫码链接。当前页面先提供复制入口，支付完成后余额会自动刷新，也可以手动刷新支付结果。',
+                    '微信 Native 支付会返回扫码链接。支付完成后积分会自动刷新，也可以手动刷新支付结果。',
                     style: GuoXueTypography.caption.copyWith(
                       color: GuoXueColors.inkGray,
                       height: 1.4,
@@ -735,7 +738,7 @@ class _RechargeStatusCard extends StatelessWidget {
 
   String _statusLabel(String status) {
     return switch (status) {
-      'paid' => '已支付，余额已刷新',
+      'paid' => '已支付，积分已刷新',
       'closed' => '已关闭',
       'failed' => '支付失败',
       'refunded' => '已退款',
@@ -823,7 +826,7 @@ class _PaymentInstruction extends StatelessWidget {
       return '支付订单已创建，但当前支付参数未返回。请检查服务端微信或支付宝配置。';
     }
     if (payment.provider == 'wechat') {
-      return '微信充值请扫码支付。到账只以微信支付异步回调为准，前端不会直接增加余额。';
+      return '微信充值请扫码支付。到账只以微信支付异步回调为准，前端不会直接增加积分。';
     }
     if (payment.provider == 'alipay') {
       return '支付宝充值会打开新的支付页面。付款成功后请关闭支付宝页面，回到本页查看到账状态；到账只以支付宝异步通知为准。';
@@ -863,7 +866,7 @@ class _WalletTransactionTile extends StatelessWidget {
             ),
           ),
           Text(
-            formatWalletCents(transaction.amountCents),
+            formatPointsCenti(transaction.amountCents),
             style: GuoXueTypography.body.copyWith(
               color: isIncome ? GuoXueColors.success : GuoXueColors.primary,
               fontWeight: FontWeight.w700,

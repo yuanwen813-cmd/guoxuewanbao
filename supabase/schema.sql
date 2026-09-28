@@ -341,6 +341,9 @@ create trigger trg_user_attributions_touch_updated_at
 before update on user_attributions
 for each row execute function touch_updated_at();
 
+-- After bootstrap, apply ai_report_jobs.sql and points_migration.sql. Do not
+-- rerun this legacy schema alone after the points migration: the bonus RPC
+-- below would otherwise replace the one-time points registration grant.
 create or replace function ensure_app_user(
   p_auth_user_id uuid,
   p_phone text

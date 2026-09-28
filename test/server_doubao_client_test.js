@@ -152,7 +152,7 @@ async function run() {
       refundAiReport: async () => { refunds += 1; return { order: {}, wallet: {} }; },
       recordServiceEventQuietly: () => {},
     };
-    const body = { productId: product.id, expectedPriceCents: 500, userPrompt: '测试问题', systemPrompt: 'client formatting rules' };
+    const body = { productId: product.id, expectedPointsCenti: 500, userPrompt: '测试问题', systemPrompt: 'client formatting rules' };
     const generated = await generateAiReport({ userId: 'test-user', body, dependencies });
     assert.equal(savedText, generated.answer);
     assert.ok(generated.answer.startsWith('解卦为传统民俗文化内容，不能当作将发生的事实，仅作娱乐参考。'));
@@ -163,9 +163,9 @@ async function run() {
     assert.ok(natal.answer.startsWith('命理解读为传统民俗文化内容'));
 
     const before = debits;
-    for (const expectedPriceCents of [undefined, 100, 390, 690, '500', -500]) {
+    for (const expectedPointsCenti of [undefined, 100, 390, 690, '500', -500]) {
       await assert.rejects(
-        () => generateAiReport({ userId: 'test-user', body: { ...body, expectedPriceCents }, dependencies }),
+        () => generateAiReport({ userId: 'test-user', body: { ...body, expectedPointsCenti }, dependencies }),
         (error) => error.statusCode === 409,
       );
     }
@@ -180,7 +180,7 @@ async function run() {
     await assert.rejects(() => generateAiReport({
       userId: 'test-user', body,
       dependencies: { ...dependencies, callDoubao: async () => ({ answer: '' }) },
-    }), /本次扣费已自动退回/);
+    }), /本次积分已自动退回/);
     assert.equal(refunds, 1);
 
     // Exercise the actual Responses parser through the debit/refund service.
@@ -192,7 +192,7 @@ async function run() {
       await assert.rejects(() => generateAiReport({
         userId: 'test-user', body,
         dependencies: { ...dependencies, callDoubao, completeAiReport: async () => { completions += 1; } },
-      }), /本次扣费已自动退回/);
+      }), /本次积分已自动退回/);
     }
     assert.equal(debits - beforeInvalidDebits, invalidResponses.length);
     assert.equal(refunds - beforeInvalidRefunds, invalidResponses.length);
@@ -230,5 +230,5 @@ async function run() {
   }
 }
 
-run().then(() => console.log('Doubao provider and five-yuan pricing checks passed'))
+run().then(() => console.log('Doubao provider and five-point pricing checks passed'))
   .catch((error) => { console.error(error); process.exitCode = 1; });

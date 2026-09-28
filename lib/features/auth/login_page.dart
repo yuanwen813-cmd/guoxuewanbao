@@ -30,6 +30,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final auth = ref.watch(authStoreProvider);
     ref.listen(authStoreProvider, (previous, next) {
       if (next.isAuthenticated && previous?.isAuthenticated != true) {
+        if (next.message?.contains('10 积分') == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(next.message!)),
+          );
+        }
         if (context.canPop()) {
           context.pop();
         } else {

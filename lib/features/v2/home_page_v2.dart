@@ -133,7 +133,7 @@ class _HomeAssetPlaceholder extends StatelessWidget {
           entry: FeatureEntryV2(
             id: 'wallet',
             title: '钱包充值',
-            subtitle: '查看服务端钱包余额、充值和 AI 消费流水',
+            subtitle: '查看积分余额、充值和 AI 消费流水',
             route: '/wallet',
             icon: Icons.account_balance_wallet_outlined,
             category: FeatureCategoryV2.mine,

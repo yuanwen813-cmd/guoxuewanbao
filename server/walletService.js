@@ -7,6 +7,7 @@ function mapWallet(row) {
   if (!row) return null;
   return {
     balanceCents: Number(row.balance_cents || 0),
+    pointsBalance: Number(row.points_balance ?? (Number(row.balance_cents || 0) / 100)),
     currency: row.currency || 'CNY',
     updatedAt: row.updated_at || row.created_at,
   };
@@ -18,11 +19,16 @@ function mapTransaction(row) {
     type: row.type,
     amountCents: Number(row.amount_cents || 0),
     balanceAfterCents: Number(row.balance_after_cents || 0),
+    pointsChange: Number(row.amount_cents || 0) / 100,
+    pointsBalanceAfter: Number(row.balance_after_cents || 0) / 100,
     currency: row.currency || 'CNY',
     refType: row.ref_type,
     refId: row.ref_id,
     outTradeNo: row.out_trade_no,
-    note: row.note,
+    note: row.type === 'recharge' ? '积分充值'
+      : row.type === 'ai_debit' ? 'AI 解析扣积分'
+      : row.type === 'ai_refund' ? 'AI 解析失败退积分'
+      : row.note,
     createdAt: row.created_at,
   };
 }
@@ -44,6 +50,7 @@ function mapRechargeOrder(row) {
     provider: row.provider,
     tradeType: row.trade_type,
     amountCents: Number(row.amount_cents || 0),
+    pointsGranted: row.status === 'paid' ? Number(row.amount_cents || 0) / 100 : 0,
     currency: row.currency || 'CNY',
     status: row.status,
     providerTradeNo: row.provider_trade_no,
@@ -62,6 +69,8 @@ function mapAiReportOrder(row) {
     productId: row.product_id,
     reportType: row.report_type,
     priceCents: Number(row.price_cents || 0),
+    pricePoints: Number(row.price_cents || 0) / 100,
+    chargeUnit: row.charge_unit || 'CNY',
     currency: row.currency || 'CNY',
     status: row.status,
     resultText: row.result_text,
@@ -102,6 +111,12 @@ async function getWallet(userId) {
 
 async function reconcileEmptyAiReportsForUser(userId) {
   const supabase = getSupabaseServiceClient();
+  const { error: expiryError } = await supabase.rpc('expire_stale_inline_ai_reports', {
+    p_user_id: userId,
+  });
+  if (expiryError && expiryError.code !== 'PGRST202') {
+    throw new HttpError(500, 'AI 解析积分核对失败', expiryError.message);
+  }
   const { data, error } = await supabase
     .from('ai_report_orders')
     .select('id, result_text')
@@ -120,7 +135,7 @@ async function reconcileEmptyAiReportsForUser(userId) {
   for (const order of emptyOrders) {
     await refundAiReport({
       orderId: order.id,
-      errorMessage: 'AI 服务未返回有效内容，已自动退款',
+      errorMessage: 'AI 服务未返回有效内容，积分已自动退回',
       model: null,
     });
   }
@@ -131,8 +146,8 @@ function isInvalidAiReportText(value) {
   return !text || text === 'AI 服务未返回内容。' || text === 'AI 服务未返回内容';
 }
 
-async function grantRegistrationBonusIfEligible(userId) {
-  const supabase = getSupabaseServiceClient();
+async function grantRegistrationBonusIfEligible(userId, { supabaseClient } = {}) {
+  const supabase = supabaseClient || getSupabaseServiceClient();
   const { data, error } = await supabase.rpc('grant_registration_bonus', {
     p_user_id: userId,
   });
@@ -148,7 +163,7 @@ async function grantRegistrationBonusIfEligible(userId) {
         schemaUnavailable: true,
       };
     }
-    throw new HttpError(500, '注册赠送余额处理失败', error.message);
+    throw new HttpError(500, '注册赠送积分处理失败', error.message);
   }
   return mapRegistrationBonus(data || {});
 }
@@ -308,10 +323,11 @@ async function createAiReportDebit({
   baziChartJson,
   questionResultJson,
   promptSnapshot,
+  requestId,
   supabaseClient,
 }) {
   const supabase = supabaseClient || getSupabaseServiceClient();
-  const { data, error } = await supabase.rpc('create_ai_report_debit', {
+  const { data, error } = await supabase.rpc('create_ai_report_debit_once', {
     p_user_id: userId,
     p_product_id: product.id,
     p_report_type: product.reportType,
@@ -320,17 +336,19 @@ async function createAiReportDebit({
     p_bazi_chart_json: baziChartJson || {},
     p_question_result_json: questionResultJson || {},
     p_prompt_snapshot: promptSnapshot || '',
+    p_request_id: requestId || crypto.randomUUID(),
   });
   if (error) {
     const message = String(error.message || '');
     if (message.includes('INSUFFICIENT_BALANCE')) {
-      throw new HttpError(402, '余额不足，请先充值后再生成');
+      throw new HttpError(402, '积分不足，请先充值后再生成');
     }
-    throw new HttpError(500, 'AI 扣费订单创建失败', error.message);
+    throw new HttpError(500, 'AI 积分扣减任务创建失败', error.message);
   }
   return {
     order: mapAiReportOrder(data.order),
     wallet: mapWallet(data.wallet),
+    alreadyPending: Boolean(data.already_pending),
   };
 }
 
@@ -343,10 +361,11 @@ async function createQueuedAiReportDebit({
   promptSnapshot,
   userPrompt,
   systemPrompt,
+  requestId,
   supabaseClient,
 }) {
   const supabase = supabaseClient || getSupabaseServiceClient();
-  const { data, error } = await supabase.rpc('start_ai_report_job', {
+  const { data, error } = await supabase.rpc('start_ai_report_job_once', {
     p_user_id: userId,
     p_product_id: product.id,
     p_report_type: product.reportType,
@@ -357,18 +376,19 @@ async function createQueuedAiReportDebit({
     p_prompt_snapshot: promptSnapshot || '',
     p_user_prompt: userPrompt,
     p_system_prompt: systemPrompt || '',
+    p_request_id: requestId || crypto.randomUUID(),
   });
   if (error) {
     if (String(error.message || '').includes('INSUFFICIENT_BALANCE')) {
-      throw new HttpError(402, '余额不足，请先充值后再生成');
+      throw new HttpError(402, '积分不足，请先充值后再生成');
     }
     if (String(error.message || '').includes('AI_REPORT_ALREADY_GENERATING')) {
       throw new HttpError(409, '已有同类命盘报告正在生成，请在“我的报告”查看完成后再提交');
     }
     if (String(error.message || '').includes('AI_WORKER_UNAVAILABLE')) {
-      throw new HttpError(503, '命盘解析服务暂未就绪，本次未扣费，请稍后再试');
+      throw new HttpError(503, '命盘解析服务暂未就绪，本次未扣积分，请稍后再试');
     }
-    throw new HttpError(503, '长报告服务暂不可用，本次未扣费');
+    throw new HttpError(503, '长报告服务暂不可用，本次未扣积分');
   }
   return {
     order: mapAiReportOrder(data.order),
@@ -412,10 +432,10 @@ async function refundAiReport({
   const supabase = supabaseClient || getSupabaseServiceClient();
   const { data, error } = await supabase.rpc('refund_ai_report_order', {
     p_order_id: orderId,
-    p_error_message: errorMessage || 'AI 调用失败，已自动退款',
+    p_error_message: errorMessage || 'AI 调用失败，积分已自动退回',
     p_model: model || null,
   });
-  if (error) throw new HttpError(500, 'AI 失败退款处理失败', error.message);
+  if (error) throw new HttpError(500, 'AI 失败积分退回处理失败', error.message);
   return {
     order: mapAiReportOrder(data.order),
     wallet: mapWallet(data.wallet),

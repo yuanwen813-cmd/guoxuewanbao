@@ -24,7 +24,7 @@ import 'package:guoxueapp/infrastructure/history_service/history_service.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('AI report product catalog exposes one five-yuan option per feature', () {
+  test('AI report product catalog exposes one five-point option per feature', () {
     final daily = AiReportProductCatalog.forFeature(
       AiReportFeatureKeys.dailyHexagram,
     );
@@ -47,13 +47,15 @@ void main() {
     for (final product in AiReportProductCatalog.all) {
       expect(product.priceTier, 'flat_5');
       expect(product.priceCents, 500);
-      expect(product.priceLabel, '¥5');
-      expect(product.buttonTitle, startsWith('¥5 '));
+      expect(product.priceLabel, '5 积分');
+      expect(product.buttonTitle, startsWith('5 积分 '));
       expect(product.modelId, AiReportModelIds.doubaoSeed21Pro);
       expect(product.enabled, isTrue);
       expect(AiReportProductCatalog.forFeature(product.featureKey), hasLength(1));
-      expect(product.buttonTitle, '¥5 AI 解析');
+      expect(product.buttonTitle, '5 积分 AI 解析');
     }
+    expect(AiReportProductCatalog.byId('analysis_all_2_coin_hexagram')?.priceCents, 200);
+    expect(AiReportProductCatalog.byId('analysis_all_2_coin_hexagram')?.priceTier, 'flat_2');
     expect(AiReportProductCatalog.byId('bazi_custom_13_9'), isNull);
     expect(AiReportProductCatalog.byId('ziwei_premium'), isNull);
     expect(AiReportProductCatalog.byId('tieban_premium'), isNull);
@@ -119,7 +121,7 @@ void main() {
     await tester.tap(find.text('退出登录'));
     await tester.pumpAndSettle();
 
-    expect(find.text('确定退出当前账号吗？退出后不会删除你的余额、订单和 AI 报告，重新登录同一手机号仍可查看。'),
+    expect(find.text('确定退出当前账号吗？退出后不会删除你的积分、订单和 AI 报告，重新登录同一手机号仍可查看。'),
         findsOneWidget);
     expect(find.text('取消'), findsOneWidget);
 
@@ -159,13 +161,13 @@ void main() {
     expect(find.byKey(const Key('wallet_provider_wechat')), findsNothing);
     expect(find.text('支付宝充值'), findsOneWidget);
     expect(find.text('微信充值'), findsNothing);
-    expect(find.byKey(const Key('wallet_recharge_100')), findsOneWidget);
+    expect(find.byKey(const Key('wallet_recharge_1000')), findsOneWidget);
     expect(find.byKey(const Key('wallet_custom_option')), findsOneWidget);
     expect(find.byKey(const Key('wallet_custom_amount')), findsNothing);
     expect(find.byKey(const Key('wallet_recharge_confirm_card')), findsNothing);
     expect(find.byKey(const Key('wallet_recharge_status')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('wallet_recharge_100')));
+    await tester.tap(find.byKey(const Key('wallet_recharge_1000')));
     await tester.pump();
 
     expect(
@@ -176,7 +178,7 @@ void main() {
     await tester.tap(find.byKey(const Key('wallet_custom_option')));
     await tester.pump();
 
-    expect(find.byKey(const Key('wallet_recharge_100')), findsNothing);
+    expect(find.byKey(const Key('wallet_recharge_1000')), findsNothing);
     expect(find.byKey(const Key('wallet_custom_option')), findsNothing);
     expect(find.byKey(const Key('wallet_custom_amount')), findsOneWidget);
     expect(find.byKey(const Key('wallet_fixed_options')), findsOneWidget);
@@ -217,7 +219,7 @@ void main() {
     );
     expect(find.textContaining('生成报告'), findsWidgets);
     expect(find.byKey(const Key('ai_report_wallet_balance')), findsOneWidget);
-    expect(find.textContaining('服务端钱包'), findsWidgets);
+    expect(find.textContaining('积分由服务端管理'), findsWidgets);
     expect(find.textContaining('¥6.9'), findsNothing);
     expect(find.textContaining('¥13.9'), findsNothing);
     expect(find.text('AI 智能解读'), findsNothing);

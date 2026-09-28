@@ -101,7 +101,7 @@ class AuthApi {
     );
   }
 
-  Future<({String token, AppUser user})> verifyCode({
+  Future<({String token, AppUser user, bool bonusGranted})> verifyCode({
     required String phone,
     required String code,
   }) async {
@@ -116,6 +116,7 @@ class AuthApi {
     return (
       token: data['token'] as String? ?? '',
       user: AppUser.fromJson(data['user'] as Map<String, dynamic>? ?? {}),
+      bonusGranted: (data['registrationBonus'] as Map<String, dynamic>?)?['granted'] == true,
     );
   }
 
@@ -205,7 +206,7 @@ class AuthStore extends StateNotifier<AuthState> {
         initialized: true,
         token: result.token,
         user: result.user,
-        message: '登录成功',
+        message: result.bonusGranted ? '注册成功，已赠送您 10 积分。' : '登录成功',
       );
     } on DioException catch (error) {
       state = state.copyWith(

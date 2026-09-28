@@ -106,7 +106,7 @@ async function createAlipayPayment(order) {
   const bizContent = JSON.stringify({
     out_trade_no: order.outTradeNo,
     total_amount: centsToYuanString(order.amountCents),
-    subject: '国学万宝匣余额充值',
+    subject: '国学万宝匣积分充值',
     product_code: 'FAST_INSTANT_TRADE_PAY',
   });
   const params = {

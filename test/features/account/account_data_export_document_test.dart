@@ -47,9 +47,9 @@ void main() {
 
     expect(html, contains('<html lang="zh-CN">'));
     expect(html, contains('国学万宝匣个人数据导出'));
-    expect(html, contains('当前余额'));
-    expect(html, contains('¥3.90'));
-    expect(html, contains('AI 解析退款'));
+    expect(html, contains('积分余额'));
+    expect(html, contains('3.90 积分'));
+    expect(html, contains('AI 解析退积分'));
     expect(html, contains('这是 AI 报告内容。'));
     expect(html, contains('&lt;测试用户&gt;'));
     expect(html, isNot(contains('<测试用户>')));

@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import '../ai_reports/ai_report_product_config.dart';
 import 'wallet_store.dart';
 
 typedef AuthTokenProvider = Future<String?> Function();
@@ -148,6 +147,8 @@ class ServerWalletApi {
     required String systemPrompt,
     required String userPrompt,
     required double temperature,
+    required int expectedPointsCenti,
+    required String requestId,
     String? sourceJson,
   }) async {
     try {
@@ -155,7 +156,8 @@ class ServerWalletApi {
         '/api/ai-report-generate',
         data: {
           'productId': productId,
-          'expectedPriceCents': AiReportProductConfig.uniformPriceCents,
+          'expectedPointsCenti': expectedPointsCenti,
+          'requestId': requestId,
           'featureKey': featureKey,
           'title': title,
           'systemPrompt': systemPrompt,
@@ -173,6 +175,7 @@ class ServerWalletApi {
         model: data['model'] as String? ?? '',
         reportId: (data['report'] as Map<String, dynamic>?)?['id'] as String?,
         pending: data['pending'] == true,
+        alreadyPending: data['alreadyPending'] == true,
         wallet: _walletFromResponse(data),
       );
     } on DioException catch (error) {
@@ -254,6 +257,7 @@ class ServerAiReportResult {
   final String model;
   final String? reportId;
   final bool pending;
+  final bool alreadyPending;
   final WalletState wallet;
 
   const ServerAiReportResult({
@@ -262,6 +266,7 @@ class ServerAiReportResult {
     required this.wallet,
     this.reportId,
     this.pending = false,
+    this.alreadyPending = false,
   });
 }
 
@@ -269,6 +274,7 @@ class ServerAiReport {
   final String id;
   final String productId;
   final String status;
+  final int priceCents;
   final String? resultText;
   final String? errorMessage;
   final DateTime? createdAt;
@@ -277,6 +283,7 @@ class ServerAiReport {
     required this.id,
     required this.productId,
     required this.status,
+    required this.priceCents,
     this.resultText,
     this.errorMessage,
     this.createdAt,
@@ -286,6 +293,7 @@ class ServerAiReport {
         id: json['id'] as String? ?? '',
         productId: json['productId'] as String? ?? '',
         status: json['status'] as String? ?? '',
+        priceCents: json['priceCents'] as int? ?? 0,
         resultText: json['resultText'] as String?,
         errorMessage: json['errorMessage'] as String?,
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
@@ -386,11 +394,13 @@ class ServerWalletException implements Exception {
   final String message;
   final int? statusCode;
   final WalletState? wallet;
+  final bool refunded;
 
   const ServerWalletException(
     this.message, {
     this.statusCode,
     this.wallet,
+    this.refunded = false,
   });
 
   factory ServerWalletException.fromDio(
@@ -405,6 +415,9 @@ class ServerWalletException implements Exception {
       message ?? '服务端暂时不可用，请稍后再试',
       statusCode: error.response?.statusCode,
       wallet: wallet,
+      refunded: data is Map<String, dynamic> &&
+          data['report'] is Map<String, dynamic> &&
+          (data['report'] as Map<String, dynamic>)['status'] == 'refunded',
     );
   }
 

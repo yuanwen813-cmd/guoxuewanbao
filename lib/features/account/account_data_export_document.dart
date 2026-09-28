@@ -49,7 +49,7 @@ class AccountDataExportDocument {
     <header><h1>国学万宝匣个人数据导出</h1><div class="muted">导出时间：${_escape(_dateText(exported))}</div></header>
     <div class="notice">此文件只包含便于个人查阅的信息，不包含支付链接、支付平台交易号、订单内部标识、AI 提示词或技术快照。文件仍含个人资料，请仅在可信设备保存。</div>
     <section><h2>账号与钱包</h2><div class="grid">
-      ${_field('手机号', account['phone'])}${_field('昵称', account['nickname'])}${_field('账户状态', _accountStatus(account['status']))}${_field('账户创建时间', account['createdAt'])}${_field('当前余额', _money(wallet['balanceCents']))}${_field('最近更新时间', wallet['updatedAt'])}
+      ${_field('手机号', account['phone'])}${_field('昵称', account['nickname'])}${_field('账户状态', _accountStatus(account['status']))}${_field('账户创建时间', account['createdAt'])}${_field('积分余额', _points(wallet['balanceCents']))}${_field('最近更新时间', wallet['updatedAt'])}
     </div></section>
     ${_walletTransactionsSection(transactions)}
     ${_rechargeOrdersSection(recharges)}
@@ -70,13 +70,13 @@ class AccountDataExportDocument {
       '钱包流水',
       records,
       (record) =>
-          '${_transactionType(record['type'])} · ${_money(record['amountCents'])} · ${_dateText(record['createdAt'])}',
+          '${_transactionType(record['type'])} · ${_points(record['amountCents'])} · ${_dateText(record['createdAt'])}',
       (record) => _grid([
         _field('类型', _transactionType(record['type'])),
-        _field('金额', _money(record['amountCents'])),
-        _field('变动后余额', _money(record['balanceAfterCents'])),
+        _field('积分变化', _points(record['amountCents'])),
+        _field('变动后积分', _points(record['balanceAfterCents'])),
         _field('发生时间', record['createdAt']),
-        if (_hasValue(record['note'])) _field('说明', record['note']),
+        if (_hasValue(record['note'])) _field('说明', _transactionNote(record)),
       ]),
     );
   }
@@ -89,7 +89,8 @@ class AccountDataExportDocument {
           '${_paymentProvider(record['provider'])} · ${_money(record['amountCents'])} · ${_statusText(record['status'])}',
       (record) => _grid([
         _field('支付方式', _paymentProvider(record['provider'])),
-        _field('金额', _money(record['amountCents'])),
+        _field('实付金额', _money(record['amountCents'])),
+        _field('获得积分', record['status'] == 'paid' ? _points(record['amountCents']) : '未到账'),
         _field('状态', _statusText(record['status'])),
         _field('下单时间', record['createdAt']),
         _field('支付完成时间', record['paidAt']),
@@ -102,12 +103,12 @@ class AccountDataExportDocument {
       'AI 报告',
       records,
       (record) =>
-          '${_reportType(record['reportType'])} · ${_money(record['priceCents'])} · ${_statusText(record['status'])}',
+          '${_reportType(record['reportType'])} · ${_points(record['priceCents'])} · ${_statusText(record['status'])}',
       (record) {
         final resultText = record['resultText']?.toString().trim() ?? '';
         return '${_grid([
               _field('报告类型', _reportType(record['reportType'])),
-              _field('价格', _money(record['priceCents'])),
+              _field('消耗积分', _points(record['priceCents'])),
               _field('状态', _statusText(record['status'])),
               _field('生成时间', record['createdAt']),
             ])}${resultText.isEmpty ? '<p class="empty">该报告暂无可展示内容。</p>' : '<h3 style="margin-top:14px">报告内容</h3><div class="report">${_escape(resultText)}</div>'}';
@@ -196,12 +197,21 @@ class AccountDataExportDocument {
   static String _transactionType(Object? value) =>
       {
         'recharge': '充值入账',
-        'ai_debit': 'AI 解析扣费',
-        'ai_refund': 'AI 解析退款',
-        'manual_adjust': '余额调整',
-        'registration_bonus': '注册赠送余额',
+        'ai_debit': 'AI 解析扣积分',
+        'ai_refund': 'AI 解析退积分',
+        'manual_adjust': '积分调整',
+        'registration_bonus': '注册赠送积分',
       }[value] ??
-      '余额变动';
+      '积分变动';
+
+  static String _transactionNote(Map<String, dynamic> record) {
+    return switch (record['type']) {
+      'recharge' => '积分充值',
+      'ai_debit' => 'AI 解析扣积分',
+      'ai_refund' => 'AI 解析失败退积分',
+      _ => record['note']?.toString() ?? '',
+    };
+  }
 
   static String _paymentProvider(Object? value) => value == 'alipay'
       ? '支付宝'
@@ -264,6 +274,18 @@ class AccountDataExportDocument {
   static String _money(Object? cents) {
     final value = cents is num ? cents : num.tryParse(cents?.toString() ?? '');
     return value == null ? '未提供' : '¥${(value / 100).toStringAsFixed(2)}';
+  }
+
+  static String _points(Object? centiPoints) {
+    final value = centiPoints is int
+        ? centiPoints : int.tryParse(centiPoints?.toString() ?? '');
+    if (value == null) return '未提供';
+    final sign = value < 0 ? '-' : '';
+    final absolute = value.abs();
+    final whole = absolute ~/ 100;
+    final fractional = absolute % 100;
+    if (fractional == 0) return '$sign$whole 积分';
+    return '$sign$whole.${fractional.toString().padLeft(2, '0')} 积分';
   }
 
   static String _dateText(Object? value) {

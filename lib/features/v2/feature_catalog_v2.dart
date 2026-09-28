@@ -333,7 +333,7 @@ class FeatureCatalogV2 {
     FeatureEntryV2(
       id: 'wallet',
       title: '钱包充值',
-      subtitle: '服务端钱包，用于余额充值和 AI 解析扣费。',
+      subtitle: '服务端积分钱包，用于充值和 AI 解析扣积分。',
       route: '/wallet',
       icon: Icons.account_balance_wallet_outlined,
       category: FeatureCategoryV2.mine,

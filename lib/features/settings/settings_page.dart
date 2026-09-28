@@ -50,7 +50,7 @@ class SettingsPage extends ConsumerWidget {
                       builder: (ctx) => AlertDialog(
                         title: const Text('确认清除'),
                         content: const Text(
-                          '将删除当前账户的历史记录及本机副本。钱包余额、充值订单、已生成 AI 报告和命盘档案不受影响，此操作不可撤销。',
+                          '将删除当前账户的历史记录及本机副本。积分余额、充值订单、已生成 AI 报告和命盘档案不受影响，此操作不可撤销。',
                         ),
                         actions: [
                           TextButton(

@@ -164,6 +164,7 @@ function mapUser(row) {
     wallet: wallet
       ? {
           balanceCents: Number(wallet.balance_cents || 0),
+          pointsBalance: Number(wallet.balance_cents || 0) / 100,
           currency: wallet.currency || 'CNY',
           updatedAt: wallet.updated_at,
         }
@@ -179,11 +180,17 @@ function mapTransaction(row) {
     type: row.type,
     amountCents: Number(row.amount_cents || 0),
     balanceAfterCents: Number(row.balance_after_cents || 0),
+    pointsChange: Number(row.amount_cents || 0) / 100,
+    pointsBalanceBefore: Number(row.balance_after_cents - row.amount_cents) / 100,
+    pointsBalanceAfter: Number(row.balance_after_cents || 0) / 100,
     currency: row.currency || 'CNY',
     refType: row.ref_type,
     refId: row.ref_id,
     outTradeNo: row.out_trade_no,
-    note: row.note,
+    note: row.type === 'recharge' ? '积分充值'
+      : row.type === 'ai_debit' ? 'AI 解析扣积分'
+      : row.type === 'ai_refund' ? 'AI 解析失败退积分'
+      : row.note,
     createdAt: row.created_at,
   };
 }
@@ -198,6 +205,7 @@ function mapRecharge(row) {
     provider: row.provider,
     tradeType: row.trade_type,
     amountCents: Number(row.amount_cents || 0),
+    pointsGranted: row.status === 'paid' ? Number(row.amount_cents || 0) / 100 : 0,
     currency: row.currency || 'CNY',
     status: row.status,
     providerTradeNo: row.provider_trade_no,
@@ -216,6 +224,7 @@ function mapAiReport(row, { includeText = false } = {}) {
     productId: row.product_id,
     reportType: row.report_type,
     priceCents: Number(row.price_cents || 0),
+    pricePoints: Number(row.price_cents || 0) / 100,
     currency: row.currency || 'CNY',
     status: row.status,
     errorMessage: row.error_message,
@@ -404,7 +413,7 @@ async function listUsers({ q, status, page, pageSize }) {
   const p = pageParams(page, pageSize);
   let query = supabase
     .from('app_users')
-    .select('*, wallets(balance_cents,currency,updated_at)', { count: 'exact' })
+    .select('*, wallets(balance_cents,points_balance,currency,updated_at)', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(p.from, p.to);
   if (q) {
@@ -553,6 +562,7 @@ async function adjustWallet({ admin, userId, amountCents, reason, req }) {
     wallet: data?.wallet
       ? {
           balanceCents: Number(data.wallet.balance_cents || 0),
+          pointsBalance: Number(data.wallet.balance_cents || 0) / 100,
           currency: data.wallet.currency || 'CNY',
           updatedAt: data.wallet.updated_at,
         }

@@ -81,6 +81,7 @@ const routes = {
       ok: true,
       token: result.token,
       user: result.user,
+      registrationBonus: result.registrationBonus,
     });
   }),
 

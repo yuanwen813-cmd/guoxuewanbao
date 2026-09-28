@@ -91,7 +91,7 @@ async function createWechatPayment(order) {
   const body = JSON.stringify({
     appid: getWechatConfig().appId,
     mchid: getWechatConfig().mchId,
-    description: '国学万宝匣余额充值',
+    description: '国学万宝匣积分充值',
     out_trade_no: order.outTradeNo,
     notify_url: getWechatConfig().notifyUrl,
     amount: {

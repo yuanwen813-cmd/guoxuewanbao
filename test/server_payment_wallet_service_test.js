@@ -177,7 +177,7 @@ async function run() {
     () =>
       generateAiReport({
         userId: 'user-1',
-        body: { productId: 'question_full_3_9', expectedPriceCents: 500, userPrompt: '测试问题' },
+        body: { productId: 'question_full_3_9', expectedPointsCenti: 500, userPrompt: '测试问题' },
         dependencies: {
           getAiProduct: () => ({
             id: 'question_full_3_9',
@@ -205,7 +205,7 @@ async function run() {
     (error) =>
       error instanceof HttpError &&
       error.statusCode === 500 &&
-      error.message.includes('本次扣费已自动退回'),
+      error.message.includes('本次积分已自动退回'),
   );
   assert.equal(debitCalls, 1);
   assert.equal(refundCalls, 1);

@@ -48,7 +48,7 @@ async function run() {
     let providerCalls = 0;
     const queued = await generateAiReport({
       userId: 'user-1',
-      body: { productId: 'ziwei_basic', expectedPriceCents: 500, userPrompt: '命盘' },
+      body: { productId: 'ziwei_basic', expectedPointsCenti: 500, userPrompt: '命盘' },
       dependencies: {
         callDoubao: async () => { providerCalls += 1; },
         createQueuedAiReportDebit: async () => {
@@ -65,13 +65,26 @@ async function run() {
     assert.equal(charged, 1);
     assert.equal(providerCalls, 0);
 
+    await assert.rejects(() => generateAiReport({
+      userId: 'user-1',
+      body: { productId: 'ziwei_basic', expectedPointsCenti: 500,
+        userPrompt: '命盘', requestId: '7a2f6146-4e47-4b42-9d23-e23d85a15cb2' },
+      dependencies: {
+        callDoubao: async () => { throw new Error('reused report called provider'); },
+        createQueuedAiReportDebit: async () => ({
+          order: { id: job.order_id, status: 'refunded' },
+          wallet: { balanceCents: 500 }, alreadyPending: true,
+        }),
+      },
+    }), (error) => error.statusCode === 409 && error.message.includes('退回积分'));
+
     await assert.rejects(() => createQueuedAiReportDebit({
       userId: 'user-1', product: getAiProduct('ziwei_basic'),
       userPrompt: '命盘',
       supabaseClient: {
         rpc: async () => ({ data: null, error: { message: 'AI_WORKER_UNAVAILABLE' } }),
       },
-    }), (error) => error.statusCode === 503 && error.message.includes('未扣费'));
+    }), (error) => error.statusCode === 503 && error.message.includes('未扣积分'));
 
     const existing = await createQueuedAiReportDebit({
       userId: 'user-1', product: getAiProduct('ziwei_basic'),

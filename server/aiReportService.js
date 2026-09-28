@@ -1,4 +1,5 @@
 const { HttpError } = require('./response');
+const crypto = require('crypto');
 const { getAiProduct } = require('./productCatalog');
 const {
   completeAiReport,
@@ -79,8 +80,8 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
     throw new HttpError(400, product.disabledReason || '该 AI 解析档位暂未开放');
   }
   // Cached Web pages and older APKs must not silently charge a new price.
-  if (body.expectedPriceCents !== product.priceCents) {
-    throw new HttpError(409, 'AI 解析现为每次 5 元，请刷新页面或更新应用后确认价格（本次未扣费）');
+  if (body.expectedPointsCenti !== product.priceCents) {
+    throw new HttpError(409, `本次解析需 ${product.pricePoints} 积分，请刷新页面或更新应用后确认（本次未扣积分）`);
   }
   if (!body.userPrompt) {
     throw new HttpError(400, 'AI 解析缺少必要内容');
@@ -116,17 +117,25 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
 
   const promptSnapshot = [title, systemPrompt, userPrompt].join('\n\n');
   const providerConfig = dependencies.callDoubao ? undefined : getDoubaoConfig();
+  if (body.requestId != null &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.requestId)) {
+    throw new HttpError(400, '请求标识无效');
+  }
+  const requestId = body.requestId || crypto.randomUUID();
 
   if (process.env.AI_LONG_REPORTS_ENABLED === 'true'
       && /^(bazi|ziwei|tieban)_/.test(product.reportType)) {
     const queueReport = dependencies.createQueuedAiReportDebit || createQueuedAiReportDebit;
     const queued = await queueReport({
       userId, product, inputSnapshotJson, baziChartJson, questionResultJson,
-      promptSnapshot, userPrompt, systemPrompt,
+      promptSnapshot, userPrompt, systemPrompt, requestId,
     });
+    if (queued.order.status === 'refunded' || queued.order.status === 'failed') {
+      throw new HttpError(409, '这次解析已失败并退回积分，请重新提交');
+    }
     return {
-      pending: true,
-      answer: '',
+      pending: queued.order.status === 'generating',
+      answer: queued.order.resultText || '',
       model: providerConfig?.model || product.model,
       report: queued.order,
       wallet: queued.wallet,
@@ -141,7 +150,22 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
     baziChartJson,
     questionResultJson,
     promptSnapshot,
+    requestId,
   });
+
+  if (debit.alreadyPending) {
+    if (debit.order.status === 'refunded' || debit.order.status === 'failed') {
+      throw new HttpError(409, '这次解析已失败并退回积分，请重新提交');
+    }
+    return {
+      pending: debit.order.status !== 'completed',
+      answer: debit.order.resultText || '',
+      model: providerConfig?.model || product.model,
+      report: debit.order,
+      wallet: debit.wallet,
+      alreadyPending: true,
+    };
+  }
 
   try {
     const ai = await requestAi({
@@ -166,14 +190,14 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
   } catch (error) {
     const refunded = await refundReport({
       orderId: debit.order.id,
-      errorMessage: error.message || 'AI 调用失败，已自动退款',
+      errorMessage: error.message || 'AI 调用失败，积分已自动退回',
       model: product.model,
     });
     recordMonitoringEvent({
       category: 'ai',
       eventType: 'ai_report_refunded',
       severity: 'error',
-      message: 'AI 解析失败，扣费已自动退款',
+      message: 'AI 解析失败，积分已自动退回',
       userId,
       context: {
         productId: product.id,
@@ -186,7 +210,7 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
       : 500;
     throw new HttpError(
       statusCode,
-      `${error.message || 'AI 调用失败'}，本次扣费已自动退回`,
+      `${error.message || 'AI 调用失败'}，本次积分已自动退回`,
       {
         wallet: refunded.wallet,
         report: refunded.order,

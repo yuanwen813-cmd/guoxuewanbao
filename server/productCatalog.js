@@ -1,6 +1,8 @@
 const { getDoubaoModelId } = require('./doubaoClient');
 
+// Legacy integer units are hundredths of a point after the migration.
 const AI_REPORT_PRICE_CENTS = 500;
+const ANALYSIS_ALL_PRICE_CENTS = 200;
 
 const aiProducts = {
   question_brief_1: {
@@ -71,6 +73,11 @@ const aiProducts = {
   },
 };
 
+const analysisAllFeatures = new Set([
+  'daily_hexagram', 'gaodao_yiduan', 'coin_hexagram', 'xiaoliuren',
+  'meihua_yishu', 'bazi', 'ziwei_doushu', 'tieban_shenshu',
+]);
+
 const aliases = {
   coin_hexagram_question_brief: 'question_brief_1',
   coin_hexagram_question_full: 'question_full_3_9',
@@ -86,19 +93,28 @@ const aliases = {
 };
 
 function getAiProduct(productId) {
-  const canonicalId = aliases[productId] || productId;
-  const product = aiProducts[canonicalId];
+  if (typeof productId !== 'string') return null;
+  const canonicalId = Object.hasOwn(aliases, productId)
+    ? aliases[productId] : productId;
+  const analysisFeature = canonicalId.startsWith('analysis_all_2_')
+    ? canonicalId.slice('analysis_all_2_'.length) : null;
+  const isAnalysisAll = analysisFeature && analysisAllFeatures.has(analysisFeature);
+  const product = isAnalysisAll
+    ? { id: canonicalId, reportType: 'analysis_all', maxTokens: 6000, enabled: true }
+    : Object.hasOwn(aiProducts, canonicalId) ? aiProducts[canonicalId] : null;
   if (!product) return null;
   return {
     ...product,
     requestedProductId: productId,
     id: canonicalId,
-    priceCents: AI_REPORT_PRICE_CENTS,
+    priceCents: isAnalysisAll
+      ? ANALYSIS_ALL_PRICE_CENTS : AI_REPORT_PRICE_CENTS,
+    pricePoints: isAnalysisAll ? 2 : 5,
     model: getDoubaoModelId(),
   };
 }
 
-const fixedRechargeAmounts = new Set([100, 390, 690, 1390]);
+const fixedRechargeAmounts = new Set([1000, 2000, 5000, 10000]);
 
 function validateRechargeAmount(amountCents) {
   const value = Number(amountCents);
@@ -106,12 +122,15 @@ function validateRechargeAmount(amountCents) {
     return { ok: false, message: '充值金额必须使用整数分' };
   }
   if (fixedRechargeAmounts.has(value)) return { ok: true, amountCents: value };
-  if (value >= 100 && value <= 99900) return { ok: true, amountCents: value };
+  if (value >= 100 && value <= 99900 && value % 100 === 0) {
+    return { ok: true, amountCents: value };
+  }
   return { ok: false, message: '自定义充值金额必须在 1 元至 999 元之间' };
 }
 
 module.exports = {
   AI_REPORT_PRICE_CENTS,
+  ANALYSIS_ALL_PRICE_CENTS,
   getAiProduct,
   validateRechargeAmount,
 };

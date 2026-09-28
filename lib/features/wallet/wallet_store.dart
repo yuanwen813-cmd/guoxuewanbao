@@ -131,10 +131,10 @@ class WalletTransaction {
 
   static String _defaultTitle(WalletTransactionType type) {
     return switch (type) {
-      WalletTransactionType.recharge => '余额充值',
-      WalletTransactionType.aiDebit => 'AI 解析扣费',
-      WalletTransactionType.aiRefund => 'AI 失败退款',
-      WalletTransactionType.manualAdjust => '余额调整',
+      WalletTransactionType.recharge => '积分充值',
+      WalletTransactionType.aiDebit => 'AI 解析扣积分',
+      WalletTransactionType.aiRefund => 'AI 失败退积分',
+      WalletTransactionType.manualAdjust => '积分调整',
       WalletTransactionType.refund => '退款',
       WalletTransactionType.charge => '消费',
     };
@@ -300,6 +300,8 @@ class WalletStore extends StateNotifier<WalletState> {
     required String systemPrompt,
     required String userPrompt,
     required double temperature,
+    required int expectedPointsCenti,
+    required String requestId,
     String? sourceJson,
   }) async {
     if (_api == null) {
@@ -312,6 +314,8 @@ class WalletStore extends StateNotifier<WalletState> {
       systemPrompt: systemPrompt,
       userPrompt: userPrompt,
       temperature: temperature,
+      expectedPointsCenti: expectedPointsCenti,
+      requestId: requestId,
       sourceJson: sourceJson,
     );
     state = result.wallet;
@@ -335,6 +339,9 @@ class WalletStore extends StateNotifier<WalletState> {
     required String featureKey,
     required String productId,
   }) async {
+    if (_api != null) {
+      return const WalletChargeResult(success: false, message: '积分只能由服务端扣减');
+    }
     if (amountCents <= 0) {
       return const WalletChargeResult(
         success: false,
@@ -345,7 +352,7 @@ class WalletStore extends StateNotifier<WalletState> {
       return WalletChargeResult(
         success: false,
         message:
-            '余额不足，还需 ${formatWalletCents(amountCents - state.balanceCents)}',
+            '积分不足，还需 ${formatPointsCenti(amountCents - state.balanceCents)}',
       );
     }
 
@@ -361,7 +368,7 @@ class WalletStore extends StateNotifier<WalletState> {
     await _append(transaction);
     return WalletChargeResult(
       success: true,
-      message: '扣费成功',
+      message: '积分扣除成功',
       transactionId: transaction.id,
     );
   }
@@ -371,6 +378,7 @@ class WalletStore extends StateNotifier<WalletState> {
     required int amountCents,
     required String title,
   }) async {
+    if (_api != null) throw StateError('积分只能由服务端退回');
     if (amountCents <= 0) return;
     await _append(
       WalletTransaction(
@@ -428,4 +436,14 @@ String formatWalletCents(int cents) {
   if (minor == 0) return '$sign¥$major';
   if (minor % 10 == 0) return '$sign¥$major.${minor ~/ 10}';
   return '$sign¥$major.${minor.toString().padLeft(2, '0')}';
+}
+
+String formatPointsCenti(int centiPoints) {
+  final sign = centiPoints < 0 ? '-' : '';
+  final abs = centiPoints.abs();
+  final major = abs ~/ 100;
+  final minor = abs % 100;
+  if (minor == 0) return '$sign$major 积分';
+  if (minor % 10 == 0) return '$sign$major.${minor ~/ 10} 积分';
+  return '$sign$major.${minor.toString().padLeft(2, '0')} 积分';
 }

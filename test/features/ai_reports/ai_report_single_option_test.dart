@@ -44,19 +44,33 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(panel(product.featureKey));
       await tester.pumpAndSettle();
-      expect(find.text('¥5 AI 解析'), findsOneWidget);
+      expect(find.text('5 积分 AI 解析'), findsOneWidget);
+      expect(find.text('解析全部'), findsOneWidget);
+      expect(find.text('2 积分'), findsOneWidget);
       final buttons =
           find.byWidgetPredicate((widget) => widget is FilledButton);
-      expect(buttons, findsOneWidget);
+      expect(buttons, findsNWidgets(2));
       expect(
           find.textContaining(RegExp(r'\d+\s*[-~]\s*\d+\s*字')), findsNothing);
       for (final tier in ['简析', '基础报告', '深度报告', '高级推演', '字数', '篇幅']) {
         expect(find.textContaining(tier), findsNothing);
       }
-      await tester.ensureVisible(buttons);
+      await tester.ensureVisible(buttons.first);
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('analysis all confirms two points before submission',
+      (tester) async {
+    await tester.pumpWidget(panel(AiReportFeatureKeys.coinHexagram));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ai_report_analysis_all_2_coin_hexagram')));
+    await tester.pumpAndSettle();
+    expect(find.text('解析全部将消耗 2 积分，是否继续？'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('解析全部将消耗 2 积分，是否继续？'), findsNothing);
+  });
 
   testWidgets('all paid legacy tiers remain readable without a new purchase',
       (tester) async {
@@ -89,7 +103,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('AI 服务未返回内容。'), findsNothing);
     expect(find.text('重新解析'), findsOneWidget);
-    expect(find.text('¥5 AI 解析'), findsOneWidget);
+    expect(find.text('5 积分 AI 解析'), findsOneWidget);
     expect(find.byKey(const Key('ai_report_bazi_deep_6_9')), findsNothing);
     expect(
         tester

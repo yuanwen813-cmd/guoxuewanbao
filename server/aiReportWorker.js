@@ -4,6 +4,7 @@ const { addReportNotice } = require('./aiReportService');
 const { getAiProduct } = require('./productCatalog');
 
 const pollMs = Math.max(1000, Number(process.env.AI_WORKER_POLL_MS || 5000));
+const reconcileMs = 5 * 60 * 1000;
 const longTimeoutMs = Math.min(1800000,
   Math.max(270000, Number(process.env.ARK_LONG_TIMEOUT_MS || 1800000)));
 
@@ -69,11 +70,16 @@ async function runWorker({ supabase, requestAi = callDoubaoStream, idleMs = poll
   const config = { ...getDoubaoConfig(), timeoutMs: longTimeoutMs };
   if (!Number.isFinite(config.timeoutMs)) throw new Error('Invalid ARK_LONG_TIMEOUT_MS');
   let stopping = false;
+  let lastReconcileAt = 0;
   process.once('SIGTERM', () => { stopping = true; });
   process.once('SIGINT', () => { stopping = true; });
   console.log('AI report worker started');
   while (!stopping) {
     try {
+      if (Date.now() - lastReconcileAt >= reconcileMs) {
+        lastReconcileAt = Date.now();
+        await rpc(client, 'expire_stale_inline_ai_reports', { p_user_id: null });
+      }
       const job = await rpc(client, 'claim_ai_report_job');
       if (job) {
         await processJob(job, { supabase: client, requestAi, config });

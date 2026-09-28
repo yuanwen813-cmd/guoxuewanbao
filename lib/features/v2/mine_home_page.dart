@@ -25,7 +25,7 @@ class MineHomePage extends ConsumerWidget {
 
     return V2PageScaffold(
       title: '我的',
-      subtitle: '管理问事记录、命盘档案、报告和钱包余额。',
+      subtitle: '管理问事记录、命盘档案、报告和积分。',
       icon: Icons.person_outline,
       children: [
         _WalletBalanceCard(
@@ -49,7 +49,7 @@ class MineHomePage extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('退出登录'),
         content: const Text(
-          '确定退出当前账号吗？退出后不会删除你的余额、订单和 AI 报告，重新登录同一手机号仍可查看。',
+          '确定退出当前账号吗？退出后不会删除你的积分、订单和 AI 报告，重新登录同一手机号仍可查看。',
         ),
         actions: [
           TextButton(
@@ -123,7 +123,7 @@ class _WalletBalanceCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isAuthenticated ? '钱包余额' : '登录后查看钱包余额',
+                      isAuthenticated ? '积分余额' : '登录后查看积分',
                       style: GuoXueTypography.body.copyWith(
                         color: GuoXueColors.inkBlack,
                         fontWeight: FontWeight.w600,
@@ -133,8 +133,8 @@ class _WalletBalanceCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       isAuthenticated
-                          ? '${formatWalletCents(balanceCents)}${phone == null ? '' : ' · $phone'}'
-                          : '余额用于 AI 解析扣费，可随时充值。',
+                          ? '${formatPointsCenti(balanceCents)}${phone == null ? '' : ' · $phone'}'
+                          : '积分用于 AI 解析，可随时充值。',
                       style: GuoXueTypography.caption.copyWith(
                         color: isAuthenticated
                             ? GuoXueColors.primary

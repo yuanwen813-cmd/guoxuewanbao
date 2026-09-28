@@ -156,7 +156,7 @@ const _contentById = {
   'my-reports': _ComingSoonContent(
     title: '我的报告',
     subtitle: '后续承接月报、年报和专项报告。',
-    detail: '报告复看会基于已生成的 AI 报告订单，不会重复扣费。',
+    detail: '报告复看会基于已生成的 AI 报告订单，不会重复扣积分。',
     icon: Icons.description_outlined,
     category: FeatureCategoryV2.mine,
     status: FeatureStatusV2.comingSoon,

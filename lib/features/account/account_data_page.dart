@@ -138,7 +138,7 @@ class _AccountDataPageState extends ConsumerState<AccountDataPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              '注销前钱包余额必须为 0，且不能有待支付订单。注销后个人资料和内容不可恢复。请输入“确认注销”。',
+              '注销前积分余额必须为 0，且不能有待支付订单。注销后个人资料和内容不可恢复。请输入“确认注销”。',
             ),
             const SizedBox(height: 12),
             TextField(

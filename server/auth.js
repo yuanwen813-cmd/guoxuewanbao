@@ -209,6 +209,7 @@ function mapBusinessPayload(payload) {
     },
     wallet: {
       balanceCents: Number(payload.wallet.balance_cents || 0),
+      pointsBalance: Number(payload.wallet.points_balance ?? (Number(payload.wallet.balance_cents || 0) / 100)),
       currency: payload.wallet.currency || 'CNY',
       updatedAt: payload.wallet.updated_at,
       transactions: [],
@@ -384,6 +385,7 @@ async function verifyPhoneCode(phone, code) {
     return {
       token: createAppAuthToken(normalized),
       user: business.user,
+      registrationBonus: business.registrationBonus,
     };
   }
 
@@ -434,6 +436,7 @@ async function verifyPhoneCode(phone, code) {
   return {
     token: createAppAuthToken(normalized),
     user: business.user,
+    registrationBonus: business.registrationBonus,
   };
 }
 

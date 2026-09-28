@@ -21,29 +21,31 @@ class AiReportProductConfig {
   final String priceLabel;
   final String buttonTitle;
   final String buttonSubtitle;
+  final int costCentiPoints;
 
   const AiReportProductConfig({
     required this.id,
     required this.featureKey,
     required this.featureName,
     required this.reportType,
-    this.priceLabel = '¥5',
-    this.buttonTitle = '¥5 AI 解析',
+    this.priceLabel = '5 积分',
+    this.buttonTitle = '5 积分 AI 解析',
     this.buttonSubtitle = '根据当前事项与资料进行解析',
+    this.costCentiPoints = 500,
   });
 
   String get modelId => AiReportModelIds.doubaoSeed21Pro;
-  String get priceTier => 'flat_5';
+  String get priceTier => costCentiPoints == 200 ? 'flat_2' : 'flat_5';
   bool get enabled => true;
   String? get disabledReason => null;
 
   static const uniformPriceCents = 500;
-  int get priceCents => uniformPriceCents;
+  int get priceCents => costCentiPoints;
 }
 
 class AiReportProductCatalog {
   static const localTestPaymentCopy =
-      'AI 报告按次从服务端钱包扣费，生成失败会自动退款。\nAI 解读基于本地生成的结构化结果生成，仅供传统文化参考。';
+      'AI 报告按次从服务端扣积分，生成失败会自动退回。\nAI 解读基于本地生成的结构化结果生成，仅供传统文化参考。';
 
   static const reportFooterCopy =
       '以上内容由 AI 根据本地生成的命盘或卦象结构进行白话解读，仅供传统文化参考，不代表确定性结论，也不替代现实决策。';
@@ -104,9 +106,28 @@ class AiReportProductCatalog {
     return all.where((item) => item.featureKey == featureKey).toList();
   }
 
+  static AiReportProductConfig? analysisAllForFeature(String featureKey) {
+    final current = forFeature(featureKey);
+    if (current.isEmpty) return null;
+    return AiReportProductConfig(
+      id: 'analysis_all_2_$featureKey',
+      featureKey: featureKey,
+      featureName: current.single.featureName,
+      reportType: 'analysis_all',
+      buttonTitle: '解析全部',
+      priceLabel: '2 积分',
+      buttonSubtitle: '对当前全部资料作整体概览',
+      costCentiPoints: 200,
+    );
+  }
+
   static AiReportProductConfig? byId(String id) {
     for (final item in all) {
       if (item.id == id) return item;
+    }
+    if (id.startsWith('analysis_all_2_')) {
+      final featureKey = id.substring('analysis_all_2_'.length);
+      return analysisAllForFeature(featureKey);
     }
     return null;
   }

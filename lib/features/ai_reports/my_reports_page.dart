@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../auth/auth_store.dart';
 import '../wallet/server_wallet_api.dart';
+import '../wallet/wallet_store.dart';
 
 class MyReportsPage extends ConsumerStatefulWidget {
   const MyReportsPage({super.key});
@@ -97,7 +98,7 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
                         const Text('报告正在生成。完成后会保存在这里，请稍后刷新。')
                       else
                         Text(report.status == 'refunded'
-                            ? '本次解析未完成，¥5 已自动退回钱包。'
+                            ? '本次解析未完成，${formatPointsCenti(report.priceCents)}已自动退回。'
                             : '报告未生成，请稍后重试。'),
                     ],
                   ),
@@ -126,7 +127,7 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
   String _status(String status) => switch (status) {
         'completed' => '已完成',
         'generating' => '生成中',
-        'refunded' => '已退款',
+        'refunded' => '积分已退回',
         _ => '未完成',
       };
 

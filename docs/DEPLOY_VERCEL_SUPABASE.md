@@ -4,7 +4,7 @@
 
 本部署用于第一版公网内测：用户账户、手机号验证码登录、服务端钱包、微信/支付宝充值订单、支付回调入账、AI 解析扣费与失败退款。
 
-本项目当前不做会员权益系统，不做会员等级，不做订阅，不做积分，不做 VIP。
+本项目当前不做会员权益系统、不做会员等级、不做订阅、不做 VIP。钱包已改为积分制：人民币支付 1 元兑换 1 积分。历史版本和旧 APK 的金额说明不能作为新版本定价依据；迁移与验收顺序见 [积分迁移说明](POINTS_MIGRATION.md)。
 
 ## 1. 创建 Supabase 项目
 
@@ -40,6 +40,8 @@
 - `ai_call_logs`
 
 并创建登录建档、充值入账、AI 扣费、AI 成功保存、AI 失败退款所需 RPC。
+
+积分版新环境还须依次执行 `supabase/ai_report_jobs.sql`、`supabase/points_migration.sql`；已有环境只执行尚未执行的脚本。**不得在积分迁移后单独重跑旧 `schema.sql`**，否则旧注册赠送函数会覆盖新函数。
 
 ## 4. 创建 Vercel 项目
 
@@ -237,12 +239,11 @@ ARK_TIMEOUT_MS=270000
 
 ### 价格与历史兼容
 
-- 所有新 AI 报告统一 500 分（5 元），由 server/productCatalog.js 定价。
-- 每个功能仅保留一个“¥5 AI 解析”选项，不显示等级或字数。内部沿用既有 productId，以兼容服务端和历史数据；ID 中的旧数字不代表现价。
+- 新 AI 重点解析统一 5 积分；“解析全部” 2 积分，由 `server/productCatalog.js` 定价，不显示等级或字数。内部沿用既有 productId，以兼容历史数据；ID 中的旧数字不代表现价。
 - 已购买的旧简析、基础、深度等报告全部保留免费复看、复制和分享。已有有效报告时不再提供同一结果的付费生成按钮；旧失败报告仍可通过单一入口重试。
-- 请求带 expectedPriceCents，仅用于核对客户端已展示的价格，绝不以客户端报价扣款。
+- 请求带 `expectedPointsCenti`，仅用于核对客户端已展示的积分价格，绝不以客户端报价扣积分。
 - 未发送价格确认或仍发送旧价格的网页/APK 返回 409，提示刷新/更新，不扣费。
-- 旧订单实付金额、钱包余额、退款金额不重写，历史报告复看不收费。退款仍按原订单实付金额执行。充值金额档位不变。
+- 旧充值订单实付人民币金额不重写；旧钱包现值 1:1 转为积分。新充值档位为 10、20、50、100 元和 1 至 999 元整数自定义。历史报告复看不收费，失败退回原订单消耗的积分。
 - 空响应、被截断的报告、调用失败或超时进入已有失败退款链路。保留模型原文，不进行第二次模型改写；民俗提示在保存正文前添加，因此复看、分享、HTML 导出均随正文携带。
 
 ### 数据库日志
@@ -266,12 +267,14 @@ ARK_TIMEOUT_MS=270000
 2. 准备一台可持续运行 Node 20+ 的独立服务器/后台服务。Vercel Serverless 只负责 API，**不能**把常驻执行器放进 Vercel Function。执行器需要部署同一份代码，安装依赖后以 `npm run worker:ai` 作为启动命令，设置自动重启与单实例监控；不要求 PM2/Nginx。
 3. 只在服务端环境配置 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`、`ARK_API_KEY`、`ARK_BASE_URL`、`ARK_MODEL_ID`。执行器可以设 `ARK_LONG_TIMEOUT_MS=1800000` 和 `AI_WORKER_POLL_MS=5000`。服务角色密钥和方舟 Key 绝不可进入 Flutter 构建参数或公开仓库。
 4. 先在 Vercel **保持** `AI_LONG_REPORTS_ENABLED=false` 部署新代码并确认旧链路正常；启动执行器，确认 `ai_report_worker_status.last_seen_at` 持续刷新且数据库 RPC 无报错后，再把 Vercel 的该变量设为 `true` 并重新部署。执行器超过 90 秒没有心跳时，新命盘报告会在扣费前拒绝；极端情况下执行器在扣费后离线，超期任务仍按上文规则退款。
-5. 用测试账号做一笔 5 元命盘报告：创建接口应返回 202 和 `generating`；离开页面后从“我的报告”能看到状态；完成后全文可免费复看且流水只有一笔扣费。用模拟失败验证一笔退款。不要用真实用户的付费订单做破坏性测试。
+5. 用测试账号做一笔 5 积分命盘报告：创建接口应返回 202 和 `generating`；离开页面后从“我的报告”能看到状态；完成后全文可免费复看且流水只有一笔积分扣减。用模拟失败验证积分退回。不要用真实用户的付费订单做破坏性测试。
 6. 在 Supabase SQL Editor 监看任务：`select status, count(*) from ai_report_jobs group by status;`，并核对 `ai_report_orders` 与 `wallet_transactions`。出现长时间 `queued`、租约过期或“扣费无任务”时，先停止开启新请求并核查执行器日志与数据库迁移。执行器日志只保留订单 ID、状态码与方舟 Request ID，不记录提示词或密钥。
 
 没有独立执行器和数据库迁移时，**不要启用** `AI_LONG_REPORTS_ENABLED`；本地测试通过不等于公网长报告已修复。原有 270 秒同步超时仍可能发生，但失败订单会按现有流程退款。
 
 ### 联调与测试
+
+以下日期标注的测试与 APK 记录属于旧人民币版本留档，不代表积分版已在生产验证。积分版验收以 [积分迁移说明](POINTS_MIGRATION.md) 为准。
 
 2026-09-22 本机验证：`npm run check:api` 与 `npm run test:server` 通过。覆盖 Responses 正文读取、token 记录、统一500分、旧价格拦截、余额不足不调用模型，以及无效/不完整响应触发退款。自动测试不访问生产数据库。
 
@@ -283,7 +286,7 @@ ARK_TIMEOUT_MS=270000
 
 部署后还需用测试账号联调真实完整报告；基础连通性不能证明长报告耗时及线上退款一定正常。环境变量必须在 Production 配置后重新部署，不能仅修改本机 `.env.local`。
 
-人工重点：问事/每日一卦/命盘均显示5元，扣款500分，失败退回500分；历史报告复看不扣费；旧客户端先要求刷新；方舟日志显示预期模型；报告包含正确原始时间、民俗提示与有效正文。真实请求会使用方舟额度，联调前另行确认。
+积分版人工重点：问事/每日一卦/命盘显示 5 积分，“解析全部”显示 2 积分且先确认；失败退回同额积分；历史报告复看不扣积分；旧客户端被拒绝并提示更新；方舟日志显示预期模型；报告包含正确原始时间、民俗提示与有效正文。真实请求会使用方舟额度，联调前另行确认。
 
 ### Android 安装包更新（2026-09-23）
 
@@ -295,3 +298,10 @@ ARK_TIMEOUT_MS=270000
 - 包含单一5元豆包解析、原始起卦时间和旧报告免费复看。App 内复制的安装包链接改为官网 HTTPS 地址。
 - 本次下载链接及 AI 解析相关回归测试共54项通过；APK 完整性和新旧签名一致性已校验。
 - 构建成功，但输出了现有 Kotlin 元数据兼容性及 Cupertino 字体提示；尚未在实体手机完成安装、登录、支付和解析通测，应在发布到应用市场前解决工具链提示并完成实机验证。
+
+### 本机 Android 打包环境（2026-09-28 核对）
+
+- 上周成功构建所用的 Gradle 用户目录是 `D:\AIProjects\.local-build-tools\gradle-user-home`，不是 `C:\Users\Administrator\.gradle`，也不是 `D:\AIProjects\tool\gradle-home-points*`。该目录包含 Gradle 7.6.3 与 Android/Kotlin 插件缓存。
+- 对应 JDK 17 位于 `D:\AIProjects\.local-build-tools\jdk-17\jdk-17.0.20.1+1`；Android SDK 位于 `C:\Users\Administrator\AppData\Local\Android\Sdk`；Flutter 位于 `D:\flutter`。
+- PowerShell 构建时先设置 `$env:JAVA_HOME`、`$env:GRADLE_USER_HOME`、`$env:ANDROID_SDK_ROOT`，并把 `$env:JAVA_HOME\bin` 放在 `PATH` 前面，然后执行 `D:\flutter\bin\flutter.bat build apk --release --no-pub --dart-define=GUOXUE_API_BASE_URL=https://guoxuewanbao.cn`。
+- 2026-09-28 使用上述原有环境成功构建积分版 APK；旧版 `versionCode=2`，新版 `versionCode=3`，两者签名证书 SHA-256 均为 `6ab82a20664187ac41f2354f42619d6c00af0f414e76b7247aa3738162befa49`。新版 APK SHA-256 为 `61b4da9380e6a841fb2a70d1c10b36ef00c51f4da8f816c7869890d0a798c68e`。

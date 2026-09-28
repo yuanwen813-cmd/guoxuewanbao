@@ -9,7 +9,7 @@ function getDoubaoModelId() {
 
 function getDoubaoConfig() {
   const apiKey = String(process.env.ARK_API_KEY || '').trim();
-  if (!apiKey) throw new HttpError(503, 'AI 服务尚未配置，请稍后再试（本次未扣费）');
+  if (!apiKey) throw new HttpError(503, 'AI 服务尚未配置，请稍后再试（本次未扣积分）');
   const baseUrl = String(process.env.ARK_BASE_URL || DEFAULT_ARK_BASE_URL)
     .trim().replace(/\/+$/, '');
   // This integration only sends credentials to the official Beijing Ark API.

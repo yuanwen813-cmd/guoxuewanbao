@@ -355,13 +355,13 @@ async function deleteAccountData(userId, body) {
   if (error) {
     const message = String(error.message || '');
     if (message.includes('WALLET_BALANCE_NOT_ZERO')) {
-      throw new HttpError(409, '钱包仍有余额，请先联系客服处理后再注销');
+      throw new HttpError(409, '积分余额不为零，请先联系客服处理后再注销');
     }
     if (message.includes('PENDING_RECHARGE_EXISTS')) {
       throw new HttpError(409, '仍有待支付充值订单，请先取消后再注销');
     }
     if (message.includes('ACTIVE_AI_REPORT_EXISTS')) {
-      throw new HttpError(409, '仍有正在生成的 AI 报告，请等待完成或自动退款后再注销');
+      throw new HttpError(409, '仍有正在生成的 AI 报告，请等待完成或积分自动退回后再注销');
     }
     throw new HttpError(500, '账户注销失败', error.message);
   }

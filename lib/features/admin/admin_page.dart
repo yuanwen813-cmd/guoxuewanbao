@@ -289,8 +289,8 @@ class _AdminPageState extends State<AdminPage> {
           children: [
             _MetricCard(label: '用户数', value: '${data['users'] ?? 0}'),
             _MetricCard(
-              label: '钱包总余额',
-              value: _formatCents(data['totalWalletBalanceCents']),
+              label: '积分总余额',
+              value: _formatPoints(data['totalWalletBalanceCents']),
             ),
             _MetricCard(
               label: '已支付充值',
@@ -305,8 +305,8 @@ class _AdminPageState extends State<AdminPage> {
               value: '${data['completedAiReports'] ?? 0}',
             ),
             _MetricCard(
-              label: 'AI 收入',
-              value: _formatCents(data['aiRevenueCents']),
+              label: 'AI 积分消耗',
+              value: _formatPoints(data['aiRevenueCents']),
             ),
             _MetricCard(
               label: '云端历史记录',
@@ -396,7 +396,7 @@ class _AdminPageState extends State<AdminPage> {
               DataColumn(label: Text('手机号')),
               DataColumn(label: Text('昵称')),
               DataColumn(label: Text('状态')),
-              DataColumn(label: Text('余额')),
+              DataColumn(label: Text('积分余额')),
               DataColumn(label: Text('注册时间')),
               DataColumn(label: Text('操作')),
             ],
@@ -407,7 +407,7 @@ class _AdminPageState extends State<AdminPage> {
                     DataCell(SelectableText(_text(item, 'phone'))),
                     DataCell(Text(_text(item, 'nickname'))),
                     DataCell(Text(_text(item, 'status'))),
-                    DataCell(Text(_formatCents(_wallet(item)['balanceCents']))),
+                    DataCell(Text(_formatPoints(_wallet(item)['balanceCents']))),
                     DataCell(Text(_shortTime(_text(item, 'createdAt')))),
                     DataCell(
                       TextButton(
@@ -453,8 +453,10 @@ class _AdminPageState extends State<AdminPage> {
           child: DataTable(
             columns: const [
               DataColumn(label: Text('类型')),
-              DataColumn(label: Text('金额')),
-              DataColumn(label: Text('变动后余额')),
+              DataColumn(label: Text('积分变化')),
+              DataColumn(label: Text('变动前积分')),
+              DataColumn(label: Text('变动后积分')),
+              DataColumn(label: Text('关联任务')),
               DataColumn(label: Text('备注')),
               DataColumn(label: Text('时间')),
             ],
@@ -463,8 +465,10 @@ class _AdminPageState extends State<AdminPage> {
                 DataRow(
                   cells: [
                     DataCell(Text(_transactionType(_text(item, 'type')))),
-                    DataCell(Text(_formatCents(item['amountCents']))),
-                    DataCell(Text(_formatCents(item['balanceAfterCents']))),
+                    DataCell(Text(_formatPoints(item['amountCents']))),
+                    DataCell(Text(_formatPoints((item['balanceAfterCents'] as num? ?? 0) - (item['amountCents'] as num? ?? 0)))),
+                    DataCell(Text(_formatPoints(item['balanceAfterCents']))),
+                    DataCell(Text(_text(item, 'refId'))),
                     DataCell(Text(_text(item, 'note'))),
                     DataCell(Text(_shortTime(_text(item, 'createdAt')))),
                   ],
@@ -492,7 +496,8 @@ class _AdminPageState extends State<AdminPage> {
             columns: const [
               DataColumn(label: Text('手机号')),
               DataColumn(label: Text('渠道')),
-              DataColumn(label: Text('金额')),
+              DataColumn(label: Text('实付金额')),
+              DataColumn(label: Text('获得积分')),
               DataColumn(label: Text('状态')),
               DataColumn(label: Text('订单号')),
               DataColumn(label: Text('创建时间')),
@@ -504,6 +509,7 @@ class _AdminPageState extends State<AdminPage> {
                     DataCell(Text(_text(item, 'userPhone'))),
                     DataCell(Text(_providerLabel(_text(item, 'provider')))),
                     DataCell(Text(_formatCents(item['amountCents']))),
+                    DataCell(Text(_text(item, 'status') == 'paid' ? _formatPoints(item['amountCents']) : '未到账')),
                     DataCell(Text(_rechargeStatus(_text(item, 'status')))),
                     DataCell(SelectableText(_text(item, 'outTradeNo'))),
                     DataCell(Text(_shortTime(_text(item, 'createdAt')))),
@@ -532,7 +538,7 @@ class _AdminPageState extends State<AdminPage> {
             columns: const [
               DataColumn(label: Text('手机号')),
               DataColumn(label: Text('产品')),
-              DataColumn(label: Text('金额')),
+              DataColumn(label: Text('消耗积分')),
               DataColumn(label: Text('状态')),
               DataColumn(label: Text('时间')),
               DataColumn(label: Text('操作')),
@@ -543,7 +549,7 @@ class _AdminPageState extends State<AdminPage> {
                   cells: [
                     DataCell(Text(_text(item, 'userPhone'))),
                     DataCell(Text(_text(item, 'productId'))),
-                    DataCell(Text(_formatCents(item['priceCents']))),
+                    DataCell(Text(_formatPoints(item['priceCents']))),
                     DataCell(Text(_aiStatus(_text(item, 'status')))),
                     DataCell(Text(_shortTime(_text(item, 'createdAt')))),
                     DataCell(
@@ -567,12 +573,12 @@ class _AdminPageState extends State<AdminPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            '手工余额调整',
+            '手工积分调整',
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           const Text(
-            '只用于客服补偿、异常退款或人工修正。所有操作都会写入钱包流水和审计日志。',
+            '只用于客服补偿、异常退款或人工修正。所有操作都会写入积分流水和审计日志。',
             style: TextStyle(color: Colors.black54),
           ),
           const SizedBox(height: 18),
@@ -591,7 +597,7 @@ class _AdminPageState extends State<AdminPage> {
               decimal: true,
             ),
             decoration: const InputDecoration(
-              labelText: '调整金额，单位元，增加填 10，扣减填 -10',
+              labelText: '调整积分，增加填 10，扣减填 -10',
               border: OutlineInputBorder(),
             ),
           ),
@@ -664,7 +670,7 @@ class _AdminPageState extends State<AdminPage> {
             Text(
               '请在 Supabase SQL Editor 执行 '
               'supabase/migrations/20260831_service_event_logs.sql，'
-              '完成后重新刷新本页。执行前不影响支付、扣费或退款。',
+              '完成后重新刷新本页。执行前不影响支付、扣积分或退回。',
               style: TextStyle(color: Colors.black54),
             ),
           ],
@@ -868,19 +874,26 @@ class _AdminPageState extends State<AdminPage> {
 
   Future<void> _confirmAdjust() async {
     final userId = _adjustUserIdController.text.trim();
-    final yuan = double.tryParse(_adjustAmountController.text.trim());
+    final pointsText = _adjustAmountController.text.trim();
+    final validPoints = RegExp(r'^-?\d+(\.\d{1,2})?$').hasMatch(pointsText);
+    final parts = pointsText.replaceFirst('-', '').split('.');
+    final fraction = parts.length > 1 ? parts[1] : '0';
+    final centiPoints = validPoints
+        ? (int.parse(parts[0]) * 100 + int.parse(fraction.padRight(2, '0'))) *
+            (pointsText.startsWith('-') ? -1 : 1)
+        : 0;
     final reason = _adjustReasonController.text.trim();
-    if (userId.isEmpty || yuan == null || yuan == 0 || reason.length < 4) {
-      setState(() => _error = '请填写用户 ID、非零调整金额和调整原因');
+    if (userId.isEmpty || !validPoints || centiPoints == 0 || reason.length < 4) {
+      setState(() => _error = '请填写用户 ID、非零调整积分和调整原因');
       return;
     }
-    final amountCents = (yuan * 100).round();
+    final amountCents = centiPoints;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('确认手工调账'),
         content: Text(
-          '将为用户 $userId 调整 ${_formatCents(amountCents)}。\n\n原因：$reason\n\n该操作会写入审计日志。',
+          '将为用户 $userId 调整 ${_formatPoints(amountCents)}。\n\n原因：$reason\n\n该操作会写入审计日志。',
         ),
         actions: [
           TextButton(
@@ -905,7 +918,7 @@ class _AdminPageState extends State<AdminPage> {
       );
       _adjustAmountController.clear();
       _adjustReasonController.clear();
-      _message = '余额调整成功，已写入流水和审计日志';
+      _message = '积分调整成功，已写入流水和审计日志';
       await _loadAudits();
     });
   }
@@ -1187,6 +1200,17 @@ String _formatCents(Object? raw) {
   return '$sign¥$yuan.${cents.toString().padLeft(2, '0')}';
 }
 
+String _formatPoints(Object? raw) {
+  final value = raw is int ? raw : int.tryParse('$raw') ?? 0;
+  final sign = value < 0 ? '-' : '';
+  final abs = value.abs();
+  final points = abs ~/ 100;
+  final centi = abs % 100;
+  return centi == 0
+      ? '$sign$points 积分'
+      : '$sign$points.${centi.toString().padLeft(2, '0')} 积分';
+}
+
 String _shortTime(String raw) {
   if (raw.length <= 16) return raw;
   return raw.replaceFirst('T', ' ').substring(0, 16);
@@ -1195,8 +1219,8 @@ String _shortTime(String raw) {
 String _transactionType(String type) {
   return switch (type) {
     'recharge' => '充值',
-    'ai_debit' => 'AI 扣费',
-    'ai_refund' => 'AI 退款',
+    'ai_debit' => 'AI 扣积分',
+    'ai_refund' => 'AI 退积分',
     'manual_adjust' => '手工调账',
     _ => type,
   };
@@ -1226,7 +1250,7 @@ String _aiStatus(String status) {
     'completed' => '已完成',
     'generating' => '生成中',
     'failed' => '失败',
-    'refunded' => '已退款',
+    'refunded' => '积分已退回',
     'pending' => '待处理',
     _ => status,
   };
