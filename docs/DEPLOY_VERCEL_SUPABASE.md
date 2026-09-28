@@ -239,7 +239,7 @@ ARK_TIMEOUT_MS=270000
 
 ### 价格与历史兼容
 
-- 新 AI 重点解析统一 5 积分；“解析全部” 2 积分，由 `server/productCatalog.js` 定价，不显示等级或字数。内部沿用既有 productId，以兼容历史数据；ID 中的旧数字不代表现价。
+- 现有 AI 解析统一 2 积分，由 `server/productCatalog.js` 定价，不显示等级或字数。原提示词、报告类型与 productId 不变；此前新增的“解析全部”商品已下架，但历史报告可免费复看。ID 中的旧数字不代表现价。
 - 已购买的旧简析、基础、深度等报告全部保留免费复看、复制和分享。已有有效报告时不再提供同一结果的付费生成按钮；旧失败报告仍可通过单一入口重试。
 - 请求带 `expectedPointsCenti`，仅用于核对客户端已展示的积分价格，绝不以客户端报价扣积分。
 - 未发送价格确认或仍发送旧价格的网页/APK 返回 409，提示刷新/更新，不扣费。
@@ -267,7 +267,7 @@ ARK_TIMEOUT_MS=270000
 2. 准备一台可持续运行 Node 20+ 的独立服务器/后台服务。Vercel Serverless 只负责 API，**不能**把常驻执行器放进 Vercel Function。执行器需要部署同一份代码，安装依赖后以 `npm run worker:ai` 作为启动命令，设置自动重启与单实例监控；不要求 PM2/Nginx。
 3. 只在服务端环境配置 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`、`ARK_API_KEY`、`ARK_BASE_URL`、`ARK_MODEL_ID`。执行器可以设 `ARK_LONG_TIMEOUT_MS=1800000` 和 `AI_WORKER_POLL_MS=5000`。服务角色密钥和方舟 Key 绝不可进入 Flutter 构建参数或公开仓库。
 4. 先在 Vercel **保持** `AI_LONG_REPORTS_ENABLED=false` 部署新代码并确认旧链路正常；启动执行器，确认 `ai_report_worker_status.last_seen_at` 持续刷新且数据库 RPC 无报错后，再把 Vercel 的该变量设为 `true` 并重新部署。执行器超过 90 秒没有心跳时，新命盘报告会在扣费前拒绝；极端情况下执行器在扣费后离线，超期任务仍按上文规则退款。
-5. 用测试账号做一笔 5 积分命盘报告：创建接口应返回 202 和 `generating`；离开页面后从“我的报告”能看到状态；完成后全文可免费复看且流水只有一笔积分扣减。用模拟失败验证积分退回。不要用真实用户的付费订单做破坏性测试。
+5. 用测试账号做一笔 2 积分命盘报告：创建接口应返回 202 和 `generating`；离开页面后从“我的报告”能看到状态；完成后全文可免费复看且流水只有一笔积分扣减。用模拟失败验证积分退回。不要用真实用户的付费订单做破坏性测试。
 6. 在 Supabase SQL Editor 监看任务：`select status, count(*) from ai_report_jobs group by status;`，并核对 `ai_report_orders` 与 `wallet_transactions`。出现长时间 `queued`、租约过期或“扣费无任务”时，先停止开启新请求并核查执行器日志与数据库迁移。执行器日志只保留订单 ID、状态码与方舟 Request ID，不记录提示词或密钥。
 
 没有独立执行器和数据库迁移时，**不要启用** `AI_LONG_REPORTS_ENABLED`；本地测试通过不等于公网长报告已修复。原有 270 秒同步超时仍可能发生，但失败订单会按现有流程退款。
@@ -286,7 +286,7 @@ ARK_TIMEOUT_MS=270000
 
 部署后还需用测试账号联调真实完整报告；基础连通性不能证明长报告耗时及线上退款一定正常。环境变量必须在 Production 配置后重新部署，不能仅修改本机 `.env.local`。
 
-积分版人工重点：问事/每日一卦/命盘显示 5 积分，“解析全部”显示 2 积分且先确认；失败退回同额积分；历史报告复看不扣积分；旧客户端被拒绝并提示更新；方舟日志显示预期模型；报告包含正确原始时间、民俗提示与有效正文。真实请求会使用方舟额度，联调前另行确认。
+积分版人工重点：问事/每日一卦/命盘均只显示一个 2 积分解析入口；失败退回同额积分；历史报告复看不扣积分；旧客户端报价不符时被拒绝并提示更新；方舟日志显示预期模型；报告包含正确原始时间、民俗提示与有效正文。真实请求会使用方舟额度，联调前另行确认。
 
 ### Android 安装包更新（2026-09-23）
 
@@ -305,3 +305,4 @@ ARK_TIMEOUT_MS=270000
 - 对应 JDK 17 位于 `D:\AIProjects\.local-build-tools\jdk-17\jdk-17.0.20.1+1`；Android SDK 位于 `C:\Users\Administrator\AppData\Local\Android\Sdk`；Flutter 位于 `D:\flutter`。
 - PowerShell 构建时先设置 `$env:JAVA_HOME`、`$env:GRADLE_USER_HOME`、`$env:ANDROID_SDK_ROOT`，并把 `$env:JAVA_HOME\bin` 放在 `PATH` 前面，然后执行 `D:\flutter\bin\flutter.bat build apk --release --no-pub --dart-define=GUOXUE_API_BASE_URL=https://guoxuewanbao.cn`。
 - 2026-09-28 使用上述原有环境成功构建积分版 APK；旧版 `versionCode=2`，新版 `versionCode=3`，两者签名证书 SHA-256 均为 `6ab82a20664187ac41f2354f42619d6c00af0f414e76b7247aa3738162befa49`。新版 APK SHA-256 为 `61b4da9380e6a841fb2a70d1c10b36ef00c51f4da8f816c7869890d0a798c68e`。
+- 同日价格修正版 `versionCode=4`：原 AI 解析统一为 2 积分，移除额外“解析全部”商品，取消提交前等待钱包刷新并恢复即时生成状态。提示词保持原样。APK SHA-256 为 `9661dc51b556a7bfcae864b798bd6bfd3d415e35390c7155dc713f3e5c85f5a0`，签名与上述版本一致；构建仍有已有的 Kotlin 元数据与 Cupertino 字体提示。

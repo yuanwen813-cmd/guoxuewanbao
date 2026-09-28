@@ -172,8 +172,6 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
           buttonTitle: report.title.isEmpty ? '已保存的 AI 解析' : report.title,
           priceLabel: report.priceLabel,
           buttonSubtitle: '已保存，可免费复看',
-          costCentiPoints:
-              AiReportProductCatalog.byId(report.productId)?.priceCents ?? 500,
         );
         _answers.putIfAbsent(report.productId, () => text);
         if (report.reportId?.trim().isNotEmpty == true) {
@@ -237,8 +235,6 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
       ..._savedConfigs,
     }.values.where((config) => _answers[config.id]?.isNotEmpty == true).toList();
     final visibleConfigs = savedConfigs.isEmpty ? configs : savedConfigs;
-    final analysisAll = AiReportProductCatalog.analysisAllForFeature(widget.featureKey);
-    final anyAnswer = _answers.values.any((text) => text.isNotEmpty);
     final wallet = ref.watch(walletStoreProvider);
     final focusOptional = _focusOptional;
 
@@ -332,7 +328,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
               child: _AiReportProductTile(
                 config: config,
                 loading: _loadingProductId == config.id,
-                busy: _loadingProductId != null || _pendingReportIds.isNotEmpty || anyAnswer,
+                busy: _loadingProductId != null || _pendingReportIds.isNotEmpty,
                 answer: _answers[config.id],
                 error: _errors[config.id],
                 reportId: _reportIds[config.id],
@@ -343,22 +339,6 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
                 onFeedback: (rating) => _submitFeedback(config.id, rating),
               ),
             ),
-          if (analysisAll != null && !anyAnswer) ...[
-            _AiReportProductTile(
-              config: analysisAll,
-              loading: _loadingProductId == analysisAll.id,
-              busy: _loadingProductId != null || _pendingReportIds.isNotEmpty,
-              answer: _answers[analysisAll.id],
-              error: _errors[analysisAll.id],
-              reportId: _reportIds[analysisAll.id],
-              pending: _pendingReportIds.containsKey(analysisAll.id),
-              feedback: _feedback[analysisAll.id],
-              onGenerate: () => _confirmAnalysisAll(analysisAll),
-              onOpenReports: () => context.push('/my-reports'),
-              onFeedback: (rating) => _submitFeedback(analysisAll.id, rating),
-            ),
-            const SizedBox(height: 10),
-          ],
           const SizedBox(height: 2),
           const _NoticeText(
             '积分由服务端管理。AI 调用失败会自动退回本次消耗的积分。',
@@ -393,29 +373,14 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
     }
 
     final rawFocus = _focusController.text.trim();
-    if (rawFocus.isEmpty && !_focusOptional && !config.id.startsWith('analysis_all_2_')) {
+    if (rawFocus.isEmpty && !_focusOptional) {
       setState(() {
         _errors[config.id] = '请先输入想重点了解的事项。';
         _answers.remove(config.id);
       });
       return;
     }
-    final focus = config.id.startsWith('analysis_all_2_')
-        ? '当前资料的整体概览'
-        : rawFocus.isEmpty ? _defaultDestinyFocus : rawFocus;
-
-    try {
-      await ref.read(walletStoreProvider.notifier).syncFromServer();
-    } catch (_) {
-      // Server-side debit remains authoritative when a balance refresh fails.
-    }
-    if (!mounted || ref.read(authStoreProvider).user?.id != userId) return;
-    final balance = ref.read(walletStoreProvider).balanceCents;
-    if (balance < config.priceCents) {
-      setState(() => _errors[config.id] =
-          '积分不足，本次解析需要 ${formatPointsCenti(config.priceCents)}，当前剩余 ${formatPointsCenti(balance)}，请先充值。');
-      return;
-    }
+    final focus = rawFocus.isEmpty ? _defaultDestinyFocus : rawFocus;
 
     setState(() {
       _loadingProductId = config.id;
@@ -516,27 +481,6 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
         setState(() => _loadingProductId = null);
       }
     }
-  }
-
-  Future<void> _confirmAnalysisAll(AiReportProductConfig config) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('解析全部'),
-        content: const Text('解析全部将消耗 2 积分，是否继续？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('确认解析'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && mounted) await _generateReport(config);
   }
 
   Future<void> _submitFeedback(String productId, String rating) async {
@@ -649,17 +593,6 @@ class _AiReportProductTile extends StatelessWidget {
                         height: 1.35,
                       ),
                     ),
-                    if (config.id.startsWith('analysis_all_2_')) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        config.priceLabel,
-                        style: GuoXueTypography.caption.copyWith(
-                          color: GuoXueColors.primary,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),

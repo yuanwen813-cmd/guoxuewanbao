@@ -24,7 +24,7 @@ import 'package:guoxueapp/infrastructure/history_service/history_service.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('AI report product catalog exposes one five-point option per feature', () {
+  test('AI report product catalog exposes one two-point option per feature', () {
     final daily = AiReportProductCatalog.forFeature(
       AiReportFeatureKeys.dailyHexagram,
     );
@@ -45,17 +45,16 @@ void main() {
     expect(ziwei.length, 1);
     expect(tieban.length, 1);
     for (final product in AiReportProductCatalog.all) {
-      expect(product.priceTier, 'flat_5');
-      expect(product.priceCents, 500);
-      expect(product.priceLabel, '5 积分');
-      expect(product.buttonTitle, startsWith('5 积分 '));
+      expect(product.priceTier, 'flat_2');
+      expect(product.priceCents, 200);
+      expect(product.priceLabel, '2 积分');
+      expect(product.buttonTitle, startsWith('2 积分 '));
       expect(product.modelId, AiReportModelIds.doubaoSeed21Pro);
       expect(product.enabled, isTrue);
       expect(AiReportProductCatalog.forFeature(product.featureKey), hasLength(1));
-      expect(product.buttonTitle, '5 积分 AI 解析');
+      expect(product.buttonTitle, '2 积分 AI 解析');
     }
-    expect(AiReportProductCatalog.byId('analysis_all_2_coin_hexagram')?.priceCents, 200);
-    expect(AiReportProductCatalog.byId('analysis_all_2_coin_hexagram')?.priceTier, 'flat_2');
+    expect(AiReportProductCatalog.byId('analysis_all_2_coin_hexagram'), isNull);
     expect(AiReportProductCatalog.byId('bazi_custom_13_9'), isNull);
     expect(AiReportProductCatalog.byId('ziwei_premium'), isNull);
     expect(AiReportProductCatalog.byId('tieban_premium'), isNull);

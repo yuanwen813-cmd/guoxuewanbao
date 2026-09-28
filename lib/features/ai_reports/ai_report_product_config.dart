@@ -21,26 +21,24 @@ class AiReportProductConfig {
   final String priceLabel;
   final String buttonTitle;
   final String buttonSubtitle;
-  final int costCentiPoints;
 
   const AiReportProductConfig({
     required this.id,
     required this.featureKey,
     required this.featureName,
     required this.reportType,
-    this.priceLabel = '5 积分',
-    this.buttonTitle = '5 积分 AI 解析',
+    this.priceLabel = '2 积分',
+    this.buttonTitle = '2 积分 AI 解析',
     this.buttonSubtitle = '根据当前事项与资料进行解析',
-    this.costCentiPoints = 500,
   });
 
   String get modelId => AiReportModelIds.doubaoSeed21Pro;
-  String get priceTier => costCentiPoints == 200 ? 'flat_2' : 'flat_5';
+  String get priceTier => 'flat_2';
   bool get enabled => true;
   String? get disabledReason => null;
 
-  static const uniformPriceCents = 500;
-  int get priceCents => costCentiPoints;
+  static const uniformPriceCents = 200;
+  int get priceCents => uniformPriceCents;
 }
 
 class AiReportProductCatalog {
@@ -106,28 +104,9 @@ class AiReportProductCatalog {
     return all.where((item) => item.featureKey == featureKey).toList();
   }
 
-  static AiReportProductConfig? analysisAllForFeature(String featureKey) {
-    final current = forFeature(featureKey);
-    if (current.isEmpty) return null;
-    return AiReportProductConfig(
-      id: 'analysis_all_2_$featureKey',
-      featureKey: featureKey,
-      featureName: current.single.featureName,
-      reportType: 'analysis_all',
-      buttonTitle: '解析全部',
-      priceLabel: '2 积分',
-      buttonSubtitle: '对当前全部资料作整体概览',
-      costCentiPoints: 200,
-    );
-  }
-
   static AiReportProductConfig? byId(String id) {
     for (final item in all) {
       if (item.id == id) return item;
-    }
-    if (id.startsWith('analysis_all_2_')) {
-      final featureKey = id.substring('analysis_all_2_'.length);
-      return analysisAllForFeature(featureKey);
     }
     return null;
   }

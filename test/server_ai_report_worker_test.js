@@ -48,7 +48,7 @@ async function run() {
     let providerCalls = 0;
     const queued = await generateAiReport({
       userId: 'user-1',
-      body: { productId: 'ziwei_basic', expectedPointsCenti: 500, userPrompt: '命盘' },
+      body: { productId: 'ziwei_basic', expectedPointsCenti: 200, userPrompt: '命盘' },
       dependencies: {
         callDoubao: async () => { providerCalls += 1; },
         createQueuedAiReportDebit: async () => {
@@ -67,13 +67,13 @@ async function run() {
 
     await assert.rejects(() => generateAiReport({
       userId: 'user-1',
-      body: { productId: 'ziwei_basic', expectedPointsCenti: 500,
+      body: { productId: 'ziwei_basic', expectedPointsCenti: 200,
         userPrompt: '命盘', requestId: '7a2f6146-4e47-4b42-9d23-e23d85a15cb2' },
       dependencies: {
         callDoubao: async () => { throw new Error('reused report called provider'); },
         createQueuedAiReportDebit: async () => ({
           order: { id: job.order_id, status: 'refunded' },
-          wallet: { balanceCents: 500 }, alreadyPending: true,
+          wallet: { balanceCents: 200 }, alreadyPending: true,
         }),
       },
     }), (error) => error.statusCode === 409 && error.message.includes('退回积分'));
@@ -92,7 +92,7 @@ async function run() {
       supabaseClient: {
         rpc: async () => ({
           data: {
-            order: { id: job.order_id, status: 'generating', price_cents: 500 },
+            order: { id: job.order_id, status: 'generating', price_cents: 200 },
             wallet: { balance_cents: 0 }, already_pending: true,
           }, error: null,
         }),

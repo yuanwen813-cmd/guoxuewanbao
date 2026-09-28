@@ -177,12 +177,12 @@ async function run() {
     () =>
       generateAiReport({
         userId: 'user-1',
-        body: { productId: 'question_full_3_9', expectedPointsCenti: 500, userPrompt: '测试问题' },
+        body: { productId: 'question_full_3_9', expectedPointsCenti: 200, userPrompt: '测试问题' },
         dependencies: {
           getAiProduct: () => ({
             id: 'question_full_3_9',
             reportType: 'question_full',
-            priceCents: 500,
+            priceCents: 200,
             model: 'doubao-seed-2-1-pro-260915',
             maxTokens: 100,
             enabled: true,

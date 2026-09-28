@@ -11,9 +11,9 @@ const {
 const requestId = '7a2f6146-4e47-4b42-9d23-e23d85a15cb2';
 
 async function run() {
-  assert.equal(getAiProduct('question_full_3_9').pricePoints, 5);
-  assert.equal(getAiProduct('bazi_basic_3_9').priceCents, 500);
-  assert.equal(getAiProduct('analysis_all_2_coin_hexagram').priceCents, 200);
+  assert.equal(getAiProduct('question_full_3_9').pricePoints, 2);
+  assert.equal(getAiProduct('bazi_basic_3_9').priceCents, 200);
+  assert.equal(getAiProduct('analysis_all_2_coin_hexagram'), null);
   assert.equal(getAiProduct('analysis_all_2_unknown'), null);
   assert.equal(getAiProduct(null), null);
   assert.equal(getAiProduct('constructor'), null);
@@ -46,17 +46,17 @@ async function run() {
       debitCalls.push({ name, args });
       return { data: {
         order: { id: 'report-1', product_id: 'question_full_3_9',
-          price_cents: 500, status: 'generating', charge_unit: 'POINTS' },
-        wallet: { balance_cents: 500, points_balance: 5 },
+          price_cents: 200, status: 'generating', charge_unit: 'POINTS' },
+        wallet: { balance_cents: 800, points_balance: 8 },
         already_pending: false,
       }, error: null };
     } },
   });
   assert.equal(debitCalls[0].name, 'create_ai_report_debit_once');
   assert.equal(debitCalls[0].args.p_request_id, requestId);
-  assert.equal(debitCalls[0].args.p_price_cents, 500);
-  assert.equal(debit.wallet.pointsBalance, 5);
-  assert.equal(debit.order.pricePoints, 5);
+  assert.equal(debitCalls[0].args.p_price_cents, 200);
+  assert.equal(debit.wallet.pointsBalance, 8);
+  assert.equal(debit.order.pricePoints, 2);
   assert.equal(debit.order.chargeUnit, 'POINTS');
 
   const queuedCalls = [];
@@ -66,8 +66,8 @@ async function run() {
     supabaseClient: { rpc: async (name, args) => {
       queuedCalls.push({ name, args });
       return { data: {
-        order: { id: 'report-2', price_cents: 500, status: 'generating' },
-        wallet: { balance_cents: 500 }, already_pending: false,
+        order: { id: 'report-2', price_cents: 200, status: 'generating' },
+        wallet: { balance_cents: 800 }, already_pending: false,
       }, error: null };
     } },
   });
@@ -77,20 +77,32 @@ async function run() {
   let providerCalls = 0;
   const report = await generateAiReport({
     userId: 'user-1',
-    body: { productId: 'question_full_3_9', expectedPointsCenti: 500,
+    body: { productId: 'question_full_3_9', expectedPointsCenti: 200,
       requestId, userPrompt: 'question' },
     dependencies: {
       buildAiReportSystemPrompt: () => '',
       createAiReportDebit: async () => ({
         alreadyPending: true,
         order: { id: 'report-1', status: 'completed', resultText: 'saved report' },
-        wallet: { balanceCents: 500 },
+        wallet: { balanceCents: 800 },
       }),
       callDoubao: async () => { providerCalls += 1; },
     },
   });
   assert.equal(report.answer, 'saved report');
   assert.equal(providerCalls, 0);
+
+  let rejectedDebitCalls = 0;
+  for (const body of [
+    { productId: 'question_full_3_9', expectedPointsCenti: 500 },
+    { productId: 'analysis_all_2_coin_hexagram', expectedPointsCenti: 200 },
+  ]) {
+    await assert.rejects(() => generateAiReport({
+      userId: 'user-1', body: { ...body, userPrompt: 'question' },
+      dependencies: { createAiReportDebit: async () => { rejectedDebitCalls += 1; } },
+    }), (error) => error.statusCode === 409 || error.statusCode === 400);
+  }
+  assert.equal(rejectedDebitCalls, 0);
 
   await assert.rejects(() => generateAiReport({
     userId: 'user-1',

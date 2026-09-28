@@ -21,7 +21,7 @@ async function run() {
       'bazi_brief', 'bazi_basic', 'bazi_deep',
     ];
     for (const id of productIds) {
-      assert.equal(getAiProduct(id).priceCents, 500);
+      assert.equal(getAiProduct(id).priceCents, 200);
       assert.equal(getAiProduct(id).model, 'doubao-seed-2-1-pro-260915');
     }
     process.env.ARK_MODEL_ID = 'ep-test-only';
@@ -135,7 +135,7 @@ async function run() {
     let savedText;
     const dependencies = {
       createAiReportDebit: async ({ product: chargedProduct }) => {
-        assert.equal(chargedProduct.priceCents, 500);
+        assert.equal(chargedProduct.priceCents, 200);
         debits += 1;
         return { order: { id: 'test-order' } };
       },
@@ -147,12 +147,12 @@ async function run() {
       },
       completeAiReport: async ({ resultText }) => {
         savedText = resultText;
-        return { order: { id: 'test-order' }, wallet: { balanceCents: 500 } };
+        return { order: { id: 'test-order' }, wallet: { balanceCents: 800 } };
       },
       refundAiReport: async () => { refunds += 1; return { order: {}, wallet: {} }; },
       recordServiceEventQuietly: () => {},
     };
-    const body = { productId: product.id, expectedPointsCenti: 500, userPrompt: '测试问题', systemPrompt: 'client formatting rules' };
+    const body = { productId: product.id, expectedPointsCenti: 200, userPrompt: '测试问题', systemPrompt: 'client formatting rules' };
     const generated = await generateAiReport({ userId: 'test-user', body, dependencies });
     assert.equal(savedText, generated.answer);
     assert.ok(generated.answer.startsWith('解卦为传统民俗文化内容，不能当作将发生的事实，仅作娱乐参考。'));
@@ -163,7 +163,7 @@ async function run() {
     assert.ok(natal.answer.startsWith('命理解读为传统民俗文化内容'));
 
     const before = debits;
-    for (const expectedPointsCenti of [undefined, 100, 390, 690, '500', -500]) {
+    for (const expectedPointsCenti of [undefined, 100, 390, 500, 690, '200', -200]) {
       await assert.rejects(
         () => generateAiReport({ userId: 'test-user', body: { ...body, expectedPointsCenti }, dependencies }),
         (error) => error.statusCode === 409,
@@ -230,5 +230,5 @@ async function run() {
   }
 }
 
-run().then(() => console.log('Doubao provider and five-point pricing checks passed'))
+run().then(() => console.log('Doubao provider and two-point pricing checks passed'))
   .catch((error) => { console.error(error); process.exitCode = 1; });
