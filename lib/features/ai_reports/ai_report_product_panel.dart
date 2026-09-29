@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,6 +43,7 @@ class AiReportProductPanel extends ConsumerStatefulWidget {
 
 class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   final _focusController = TextEditingController();
+  final _focusNode = FocusNode();
   final Map<String, String> _answers = {};
   final Map<String, String> _errors = {};
   final Map<String, String> _reportIds = {};
@@ -50,7 +52,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   final Map<String, String> _feedback = {};
   final Map<String, AiReportProductConfig> _savedConfigs = {};
   final Map<String, AiReportProductConfig> _pendingConfigs = {};
-  final Map<String, String> _requestIds = {};
+  final Map<String, Map<String, String>> _requestIds = {};
   final Set<String> _legacyEmptyResponseProducts = {};
   Timer? _reportPoll;
   String? _loadingProductId;
@@ -85,6 +87,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   void dispose() {
     _reportPoll?.cancel();
     _focusController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -96,7 +99,8 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
     for (final entry in Map<String, String>.from(_pendingReportIds).entries) {
       try {
         final report = await api.fetchAiReportDetail(entry.value);
-        if (!mounted || ref.read(authStoreProvider).user?.id != userId ||
+        if (!mounted ||
+            ref.read(authStoreProvider).user?.id != userId ||
             _pendingReportIds[entry.key] != entry.value) continue;
         if (report.status == 'generating') continue;
         final focus = _pendingFocus.remove(entry.key) ?? _defaultDestinyFocus;
@@ -154,7 +158,8 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
     if (configs.isEmpty) return;
     final current = configs.single;
     for (final report in widget.initialReports) {
-      if (report.featureKey.isNotEmpty && report.featureKey != widget.featureKey) {
+      if (report.featureKey.isNotEmpty &&
+          report.featureKey != widget.featureKey) {
         continue;
       }
       final text = report.text.trim();
@@ -233,7 +238,10 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
     final savedConfigs = {
       for (final config in configs) config.id: config,
       ..._savedConfigs,
-    }.values.where((config) => _answers[config.id]?.isNotEmpty == true).toList();
+    }
+        .values
+        .where((config) => _answers[config.id]?.isNotEmpty == true)
+        .toList();
     final visibleConfigs = savedConfigs.isEmpty ? configs : savedConfigs;
     final wallet = ref.watch(walletStoreProvider);
     final focusOptional = _focusOptional;
@@ -271,9 +279,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
           ),
           const SizedBox(height: 8),
           Text(
-            focusOptional
-                ? '想重点了解的方向可留空，默认解读整体命盘。'
-                : '所问事项将与卦象和原始起卦时间一起提交。',
+            focusOptional ? '想重点了解的方向可留空，默认解读整体命盘。' : '所问事项将与卦象和原始起卦时间一起提交。',
             style: GuoXueTypography.caption.copyWith(
               color: GuoXueColors.inkGray,
               letterSpacing: 0,
@@ -312,6 +318,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
           TextField(
             key: Key('ai_report_focus_${widget.featureKey}'),
             controller: _focusController,
+            focusNode: _focusNode,
             minLines: 2,
             maxLines: 3,
             decoration: InputDecoration(
@@ -337,6 +344,14 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
                 onGenerate: () => _generateReport(config),
                 onOpenReports: () => context.push('/my-reports'),
                 onFeedback: (rating) => _submitFeedback(config.id, rating),
+                onEditQuestion: () {
+                  _focusNode.requestFocus();
+                  final target = _focusNode.context;
+                  if (target != null) {
+                    Scrollable.ensureVisible(target,
+                        duration: const Duration(milliseconds: 200));
+                  }
+                },
               ),
             ),
           const SizedBox(height: 2),
@@ -351,7 +366,8 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   }
 
   Future<void> _generateReport(AiReportProductConfig config) async {
-    if (_loadingProductId != null || _pendingReportIds.isNotEmpty ||
+    if (_loadingProductId != null ||
+        _pendingReportIds.isNotEmpty ||
         _answers.values.any((text) => text.isNotEmpty)) {
       return;
     }
@@ -381,6 +397,8 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
       return;
     }
     final focus = rawFocus.isEmpty ? _defaultDestinyFocus : rawFocus;
+    final userPrompt = _buildUserPrompt(config, focus);
+    final requestSnapshot = jsonEncode([userId, userPrompt, widget.sourceJson]);
 
     setState(() {
       _loadingProductId = config.id;
@@ -395,10 +413,12 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
                 featureKey: config.featureKey,
                 title: config.buttonTitle,
                 systemPrompt: '',
-                userPrompt: _buildUserPrompt(config, focus),
+                userPrompt: userPrompt,
                 temperature: 0.45,
                 expectedPointsCenti: config.priceCents,
-                requestId: _requestIds.putIfAbsent(config.id, () => const Uuid().v4()),
+                requestId: _requestIds
+                    .putIfAbsent(config.id, () => {})
+                    .putIfAbsent(requestSnapshot, () => const Uuid().v4()),
                 sourceJson: widget.sourceJson,
               );
       if (!mounted || ref.read(authStoreProvider).user?.id != userId) return;
@@ -412,7 +432,8 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
         });
         if (!result.alreadyPending) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('本次解析消耗 ${formatPointsCenti(config.priceCents)}，剩余 ${formatPointsCenti(ref.read(walletStoreProvider).balanceCents)}。报告正在生成。'),
+            content: Text(
+                '本次解析消耗 ${formatPointsCenti(config.priceCents)}，剩余 ${formatPointsCenti(ref.read(walletStoreProvider).balanceCents)}。报告正在生成。'),
           ));
         }
         return;
@@ -454,7 +475,8 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
       );
       if (!result.alreadyPending) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('本次解析消耗 ${formatPointsCenti(config.priceCents)}，剩余 ${formatPointsCenti(ref.read(walletStoreProvider).balanceCents)}'),
+          content: Text(
+              '本次解析消耗 ${formatPointsCenti(config.priceCents)}，剩余 ${formatPointsCenti(ref.read(walletStoreProvider).balanceCents)}'),
         ));
       }
     } on ServerWalletException catch (error) {
@@ -464,8 +486,10 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
             .read(walletStoreProvider.notifier)
             .replaceFromServer(error.wallet!);
       }
-      if (error.refunded || error.statusCode == 402 || error.statusCode == 409) {
-        _requestIds.remove(config.id);
+      if (error.refunded ||
+          error.statusCode == 402 ||
+          error.statusCode == 409) {
+        _requestIds[config.id]?.remove(requestSnapshot);
       }
       if (!mounted || ref.read(authStoreProvider).user?.id != userId) return;
       setState(() {
@@ -538,6 +562,7 @@ class _AiReportProductTile extends StatelessWidget {
   final VoidCallback onGenerate;
   final VoidCallback onOpenReports;
   final ValueChanged<String> onFeedback;
+  final VoidCallback onEditQuestion;
 
   const _AiReportProductTile({
     required this.config,
@@ -551,6 +576,7 @@ class _AiReportProductTile extends StatelessWidget {
     required this.onGenerate,
     required this.onOpenReports,
     required this.onFeedback,
+    required this.onEditQuestion,
   });
 
   @override
@@ -599,8 +625,9 @@ class _AiReportProductTile extends StatelessWidget {
               const SizedBox(width: 10),
               FilledButton.icon(
                 key: Key('ai_report_${config.id}'),
-                onPressed:
-                    busy || pending || !config.enabled || hasAnswer ? null : onGenerate,
+                onPressed: busy || pending || !config.enabled || hasAnswer
+                    ? null
+                    : onGenerate,
                 icon: loading
                     ? const SizedBox(
                         width: 16,
@@ -613,7 +640,11 @@ class _AiReportProductTile extends StatelessWidget {
                 label: Text(
                   loading
                       ? '生成中'
-                      : (pending ? '生成中' : hasAnswer ? '已生成' : (canRetry ? '重新解析' : '生成报告')),
+                      : (pending
+                          ? '生成中'
+                          : hasAnswer
+                              ? '已生成'
+                              : (canRetry ? '重新解析' : '生成报告')),
                 ),
               ),
             ],
@@ -649,6 +680,13 @@ class _AiReportProductTile extends StatelessWidget {
                 height: 1.4,
               ),
             ),
+            if (canRetry)
+              TextButton.icon(
+                key: Key('ai_report_edit_${config.id}'),
+                onPressed: busy || pending ? null : onEditQuestion,
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('修改问题'),
+              ),
           ],
           if (answer != null) ...[
             const SizedBox(height: 10),

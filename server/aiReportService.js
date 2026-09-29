@@ -6,10 +6,13 @@ const {
   createAiReportDebit,
   createQueuedAiReportDebit,
   getAiReportForUser,
+  getWallet,
   reconcileEmptyAiReportsForUser,
   refundAiReport,
 } = require('./walletService');
 const { buildAiReportSystemPrompt } = require('./promptLoader');
+const { normalizeReportUserPrompt } = require('./aiReportInput');
+const { ensureDeliveredAiReport } = require('./aiReportQuality');
 const { recordServiceEventQuietly } = require('./monitoringService');
 const { callDoubao, getDoubaoConfig } = require('./doubaoClient');
 
@@ -49,11 +52,7 @@ function assertJsonSizeLimit(name, value, maxChars) {
 }
 
 function ensureAiAnswer(value) {
-  const answer = typeof value === 'string' ? value.trim() : '';
-  if (!answer) {
-    throw new HttpError(424, 'AI 服务未返回有效内容');
-  }
-  return answer;
+  return ensureDeliveredAiReport(value);
 }
 
 function addReportNotice(answer, product) {
@@ -98,7 +97,8 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
     promptBuilder(clientSystemPrompt),
     maxSystemPromptChars(),
   );
-  const userPrompt = assertTextLimit('解析问题', body.userPrompt, maxPromptChars());
+  const originalUserPrompt = assertTextLimit('解析问题', body.userPrompt, maxPromptChars());
+  const userPrompt = assertTextLimit('解析问题', normalizeReportUserPrompt(originalUserPrompt), maxPromptChars());
   const inputSnapshotJson = assertJsonSizeLimit(
     '输入快照',
     body.inputSnapshotJson,
@@ -167,32 +167,31 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
     };
   }
 
+  let ai;
+  let answer;
   try {
-    const ai = await requestAi({
+    ai = await requestAi({
       product,
       systemPrompt,
       userPrompt,
       config: providerConfig,
     });
-    const answer = addReportNotice(ai.answer, product);
-    const completed = await completeReport({
-      orderId: debit.order.id,
-      resultText: answer,
-      model: ai.model,
-      usage: ai.usage,
-    });
-    return {
-      answer,
-      model: ai.model,
-      report: completed.order,
-      wallet: completed.wallet,
-    };
+    answer = addReportNotice(ai.answer, product);
   } catch (error) {
     const refunded = await refundReport({
       orderId: debit.order.id,
       errorMessage: error.message || 'AI 调用失败，积分已自动退回',
       model: product.model,
     });
+    if (refunded.order.status === 'completed') {
+      return {
+        answer: refunded.order.resultText,
+        model: product.model,
+        report: refunded.order,
+        wallet: refunded.wallet,
+        alreadyPending: true,
+      };
+    }
     recordMonitoringEvent({
       category: 'ai',
       eventType: 'ai_report_refunded',
@@ -215,9 +214,54 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
         wallet: refunded.wallet,
         report: refunded.order,
         refunded: true,
+        deliveryReason: error.details?.deliveryReason,
       },
     );
   }
+
+  // Saving can commit even when its HTTP response is lost. Retry only the
+  // idempotent settlement, never the AI request or the debit.
+  let settled;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      settled = await completeReport({
+        orderId: debit.order.id, resultText: answer, model: ai.model, usage: ai.usage,
+      });
+      break;
+    } catch (_) {
+      try {
+        const report = await (dependencies.getAiReportForUser || getAiReportForUser)({
+          userId, orderId: debit.order.id,
+        });
+        if (report.status !== 'generating' && report.status !== 'pending') {
+          let wallet = debit.wallet;
+          try { wallet = await (dependencies.getWallet || getWallet)(userId); } catch (_) { /* Next wallet refresh reconciles this. */ }
+          settled = { order: report, wallet };
+          break;
+        }
+      } catch (_) { /* An unavailable database is not proof of a failed task. */ }
+    }
+  }
+  if (!settled) {
+    recordMonitoringEvent({
+      category: 'ai', eventType: 'ai_report_settlement_uncertain', severity: 'error',
+      message: 'AI 报告保存状态待核对，未执行盲目退款', userId,
+      context: { orderId: debit.order.id, productId: product.id },
+    });
+    return {
+      pending: true, answer: '', model: ai.model,
+      report: debit.order, wallet: debit.wallet,
+    };
+  }
+  if (settled.order.status === 'refunded' || settled.order.status === 'failed') {
+    throw new HttpError(409, '本次解析已结束并退回积分，请重新提交', {
+      report: settled.order, wallet: settled.wallet, refunded: true,
+    });
+  }
+  return {
+    answer: settled.order.resultText || answer,
+    model: ai.model, report: settled.order, wallet: settled.wallet,
+  };
 }
 
 async function getAiReportDetail({ userId, orderId }) {

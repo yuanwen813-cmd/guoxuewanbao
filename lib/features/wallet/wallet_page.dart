@@ -29,6 +29,27 @@ class _WalletPageState extends ConsumerState<WalletPage> {
   int? _selectedAmountCents;
   RechargeCreateResult? _latestRecharge;
   Timer? _pollTimer;
+  int _accountRevision = 0;
+
+  bool _currentAccount(int revision) => mounted && revision == _accountRevision;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshWallet());
+  }
+
+  Future<void> _refreshWallet() async {
+    if (!mounted || !ref.read(authStoreProvider).isAuthenticated) return;
+    final userId = ref.read(authStoreProvider).user?.id;
+    try {
+      await ref.read(walletStoreProvider.notifier).syncFromServer();
+    } catch (_) {
+      if (mounted && ref.read(authStoreProvider).user?.id == userId) {
+        setState(() => _pageError = '积分流水暂未刷新，请稍后重试。');
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -43,8 +64,13 @@ class _WalletPageState extends ConsumerState<WalletPage> {
     final wallet = ref.watch(walletStoreProvider);
 
     ref.listen(authStoreProvider, (previous, next) {
-      if (next.isAuthenticated && previous?.isAuthenticated != true) {
-        ref.read(walletStoreProvider.notifier).syncFromServer();
+      if (previous?.user?.id != next.user?.id) {
+        _accountRevision++;
+        _pollTimer?.cancel();
+        _latestRecharge = null;
+        _pageError = null;
+        _submitting = false;
+        unawaited(_refreshWallet());
       }
     });
 
@@ -230,6 +256,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
   }
 
   Future<void> _createRecharge(int amountCents) async {
+    final revision = _accountRevision;
     setState(() {
       _submitting = true;
       _pageError = null;
@@ -241,20 +268,20 @@ class _WalletPageState extends ConsumerState<WalletPage> {
                 provider: _provider,
                 tradeType: _provider == 'wechat' ? 'web_native' : 'web_pc',
               );
-      if (!mounted) return;
+      if (!_currentAccount(revision)) return;
       setState(() => _latestRecharge = result);
       _startPolling(result.order);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('充值订单已创建，请完成支付后等待到账')),
       );
     } on ServerWalletException catch (error) {
-      if (!mounted) return;
+      if (!_currentAccount(revision)) return;
       setState(() => _pageError = error.message);
     } catch (_) {
-      if (!mounted) return;
+      if (!_currentAccount(revision)) return;
       setState(() => _pageError = '充值订单创建失败，请稍后再试。');
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (_currentAccount(revision)) setState(() => _submitting = false);
     }
   }
 
@@ -276,6 +303,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
   }
 
   Future<void> _refreshLatestRecharge() async {
+    final revision = _accountRevision;
     final current = _latestRecharge;
     if (current == null) return;
     try {
@@ -284,7 +312,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
                 orderId: current.order.id,
                 outTradeNo: current.order.outTradeNo,
               );
-      if (!mounted) return;
+      if (!_currentAccount(revision)) return;
       if (_latestRecharge?.order.id != current.order.id) return;
       if (order.status == 'closed') {
         setState(() => _latestRecharge = null);
@@ -303,6 +331,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
   }
 
   Future<void> _cancelLatestRecharge() async {
+    final revision = _accountRevision;
     final current = _latestRecharge;
     if (current == null) return;
     final confirmed = await showDialog<bool>(
@@ -325,7 +354,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !_currentAccount(revision)) return;
 
     _pollTimer?.cancel();
     setState(() {
@@ -338,24 +367,24 @@ class _WalletPageState extends ConsumerState<WalletPage> {
             orderId: current.order.id,
             outTradeNo: current.order.outTradeNo,
           );
-      if (!mounted) return;
+      if (!_currentAccount(revision)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('待支付订单已取消')),
       );
     } on ServerWalletException catch (error) {
-      if (!mounted) return;
+      if (!_currentAccount(revision)) return;
       setState(() {
         _latestRecharge = current;
         _pageError = error.message;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!_currentAccount(revision)) return;
       setState(() {
         _latestRecharge = current;
         _pageError = '取消订单失败，请稍后再试。';
       });
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (_currentAccount(revision)) setState(() => _submitting = false);
     }
   }
 }

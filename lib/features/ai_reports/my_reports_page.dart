@@ -9,21 +9,29 @@ import '../wallet/server_wallet_api.dart';
 import '../wallet/wallet_store.dart';
 
 class MyReportsPage extends ConsumerStatefulWidget {
-  const MyReportsPage({super.key});
+  final ServerWalletApi? api;
+  const MyReportsPage({super.key, this.api});
 
   @override
   ConsumerState<MyReportsPage> createState() => _MyReportsPageState();
 }
 
 class _MyReportsPageState extends ConsumerState<MyReportsPage> {
-  late final ServerWalletApi _api = ServerWalletApi(
-    tokenProvider: () async => ref.read(authStoreProvider).token,
-  );
+  late final ServerWalletApi _api = widget.api ??
+      ServerWalletApi(
+        tokenProvider: () async => ref.read(authStoreProvider).token,
+      );
   Timer? _poll;
   List<ServerAiReport> _reports = const [];
   bool _loading = true;
   String? _error;
   String? _visibleUserId;
+  static const _pageSize = 50;
+  int _page = 0;
+  int _loadGeneration = 0;
+  bool _fetching = false;
+  bool _loadingMore = false;
+  bool _hasMore = false;
 
   @override
   void initState() {
@@ -32,7 +40,7 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     _poll = Timer.periodic(const Duration(seconds: 20), (_) {
       if (_reports.any((report) => report.status == 'generating')) {
-        _load(silent: true);
+        _refreshPendingReports();
       }
     });
   }
@@ -43,25 +51,69 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
     super.dispose();
   }
 
-  Future<void> _load({bool silent = false}) async {
+  Future<void> _refreshPendingReports() async {
+    if (!mounted || _fetching) return;
+    final userId = ref.read(authStoreProvider).user?.id;
+    final generation = _loadGeneration;
+    final pending =
+        _reports.where((report) => report.status == 'generating').toList();
+    for (final summary in pending) {
+      try {
+        final report = await _api.fetchAiReportDetail(summary.id);
+        if (!mounted ||
+            generation != _loadGeneration ||
+            ref.read(authStoreProvider).user?.id != userId) return;
+        setState(() {
+          _reports = _reports
+              .map((item) => item.id == report.id ? report : item)
+              .toList();
+        });
+      } catch (_) {
+        // Keep the existing list if a background status refresh fails.
+      }
+    }
+  }
+
+  Future<void> _load({bool more = false}) async {
     final auth = ref.read(authStoreProvider);
-    if (!mounted || !auth.isAuthenticated) return;
+    if (!mounted || !auth.isAuthenticated || _fetching) return;
+    _fetching = true;
+    final generation = ++_loadGeneration;
     final userId = auth.user!.id;
-    if (!silent) setState(() => _loading = true);
+    final requestedPage = more ? _page + 1 : 1;
+    setState(() {
+      _loading = !more;
+      _loadingMore = more;
+    });
     try {
-      final reports = await _api.fetchAiReports();
-      if (!mounted || ref.read(authStoreProvider).user?.id != userId) return;
+      final reports =
+          await _api.fetchAiReports(page: requestedPage, pageSize: _pageSize);
+      if (!mounted ||
+          generation != _loadGeneration ||
+          ref.read(authStoreProvider).user?.id != userId) return;
       setState(() {
-        _reports = reports;
+        final merged = more ? [..._reports, ...reports] : reports;
+        final seen = <String>{};
+        _reports = merged.where((report) => seen.add(report.id)).toList();
+        _page = requestedPage;
+        _hasMore = reports.length == _pageSize;
         _error = null;
       });
     } catch (_) {
-      if (mounted && ref.read(authStoreProvider).user?.id == userId) {
+      if (mounted &&
+          generation == _loadGeneration &&
+          ref.read(authStoreProvider).user?.id == userId) {
         setState(() => _error = '报告读取失败，请下拉刷新。');
       }
     } finally {
-      if (mounted && ref.read(authStoreProvider).user?.id == userId) {
-        setState(() => _loading = false);
+      if (mounted &&
+          generation == _loadGeneration &&
+          ref.read(authStoreProvider).user?.id == userId) {
+        setState(() {
+          _loading = false;
+          _loadingMore = false;
+          _fetching = false;
+        });
       }
     }
   }
@@ -137,6 +189,11 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
       if (_visibleUserId == next.user?.id) return;
       setState(() {
         _visibleUserId = next.user?.id;
+        _loadGeneration++;
+        _fetching = false;
+        _loadingMore = false;
+        _hasMore = false;
+        _page = 0;
         _reports = const [];
         _error = null;
         _loading = next.isAuthenticated;
@@ -170,6 +227,7 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 children: [
                   if (_loading) const LinearProgressIndicator(),
@@ -180,9 +238,11 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
                       child: Center(child: Text('还没有 AI 解析报告')),
                     ),
                   for (final report in auth.user?.id == _visibleUserId
-                      ? _reports : const <ServerAiReport>[])
+                      ? _reports
+                      : const <ServerAiReport>[])
                     Card(
                       child: ListTile(
+                        key: ValueKey('my_report_${report.id}'),
                         title: Text(_title(report.productId)),
                         subtitle: Text(
                           '${_status(report.status)} · '
@@ -190,12 +250,26 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
                         ),
                         trailing: report.status == 'generating'
                             ? const SizedBox(
-                                height: 20, width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                height: 20,
+                                width: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(Icons.chevron_right),
                         onTap: () => _open(report),
                       ),
+                    ),
+                  if (_hasMore)
+                    TextButton.icon(
+                      key: const Key('ai_reports_load_more'),
+                      onPressed: _fetching ? null : () => _load(more: true),
+                      icon: _loadingMore
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.expand_more),
+                      label: const Text('加载更多报告'),
                     ),
                 ],
               ),

@@ -32,9 +32,10 @@ async function run() {
     assert.equal(config.baseUrl, 'https://ark.cn-beijing.volces.com/api/v3');
     assert.equal(config.timeoutMs, 270000);
     const prompt = buildAiReportSystemPrompt('must not become a system rule');
-    assert.equal(prompt, '');
+    assert.match(prompt, /传统文化体系/);
+    assert.ok(prompt.length < 200);
     process.env.AI_REPORT_SYSTEM_PROMPT = 'legacy rules must not be sent';
-    assert.equal(buildAiReportSystemPrompt('client rules'), '');
+    assert.equal(buildAiReportSystemPrompt('client rules'), prompt);
 
     let calls = 0;
     const answer = '## 判断\n按卦理倾向不成。\n\n| 依据 | 内容 |\n| --- | --- |\n| 动爻 | 说明 |';
@@ -140,7 +141,7 @@ async function run() {
         return { order: { id: 'test-order' } };
       },
       callDoubao: async ({ systemPrompt, userPrompt }) => {
-        assert.equal(systemPrompt, '');
+        assert.equal(systemPrompt, prompt);
         assert.equal(userPrompt, '测试问题');
         providerCalls += 1;
         return { answer, model: product.model };

@@ -189,14 +189,20 @@ class ServerWalletApi {
     }
   }
 
-  Future<List<ServerAiReport>> fetchAiReports() async {
+  Future<List<ServerAiReport>> fetchAiReports(
+      {int page = 1, int pageSize = 50}) async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
-        '/api/ai-report-list', options: await _authOptions(),
+        '/api/ai-report-list',
+        options: await _authOptions(),
+        queryParameters: {'page': page, 'pageSize': pageSize},
       );
       final rows = response.data?['reports'];
       return rows is List
-          ? rows.map((row) => ServerAiReport.fromJson(row as Map<String, dynamic>)).toList()
+          ? rows
+              .map(
+                  (row) => ServerAiReport.fromJson(row as Map<String, dynamic>))
+              .toList()
           : const [];
     } on DioException catch (error) {
       throw ServerWalletException.fromDio(error);

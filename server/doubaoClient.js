@@ -65,7 +65,7 @@ async function callDoubao({ systemPrompt, userPrompt, config = getDoubaoConfig()
     const content = messages.flatMap((item) => Array.isArray(item.content) ? item.content : []);
     if (data?.incomplete_details?.reason === 'content_filter'
         || content.some((part) => part?.type === 'refusal')) {
-      throw new HttpError(424, 'AI 暂时无法解析此内容，请调整问题后重试');
+      throw new HttpError(424, 'AI 暂时无法解析此内容，请调整问题后重试', { deliveryReason: 'refusal_only' });
     }
     // Never deliver partial text or internal reasoning as a paid report.
     if (data?.status !== 'completed' || data?.incomplete_details
@@ -171,7 +171,7 @@ async function callDoubaoStream({ systemPrompt, userPrompt, config = getDoubaoCo
       : [];
     const content = messages.flatMap((item) => Array.isArray(item.content) ? item.content : []);
     if (content.some((part) => part?.type === 'refusal')) {
-      throw new HttpError(424, 'AI 暂时无法解析此内容，请调整问题后重试');
+      throw new HttpError(424, 'AI 暂时无法解析此内容，请调整问题后重试', { deliveryReason: 'refusal_only' });
     }
     if (messages.some((item) => item.status && item.status !== 'completed')) {
       throw new HttpError(424, 'AI 报告未完整生成，请稍后重试');

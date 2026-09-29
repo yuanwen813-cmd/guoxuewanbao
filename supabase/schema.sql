@@ -704,6 +704,7 @@ create or replace function complete_ai_report_order(
 ) returns jsonb
 language plpgsql
 security definer
+set search_path = public, pg_temp
 as $$
 declare
   v_order ai_report_orders%rowtype;
@@ -716,6 +717,14 @@ begin
 
   if not found then
     raise exception 'AI_REPORT_ORDER_NOT_FOUND';
+  end if;
+
+  if v_order.status in ('completed', 'failed', 'refunded') then
+    select * into v_wallet from wallets where user_id = v_order.user_id;
+    return jsonb_build_object('order', to_jsonb(v_order), 'wallet', to_jsonb(v_wallet));
+  end if;
+  if coalesce(btrim(p_result_text, E' \t\n\r'), '') = '' then
+    raise exception 'AI_REPORT_EMPTY_RESULT';
   end if;
 
   update ai_report_orders
@@ -760,6 +769,7 @@ create or replace function refund_ai_report_order(
 ) returns jsonb
 language plpgsql
 security definer
+set search_path = public, pg_temp
 as $$
 declare
   v_order ai_report_orders%rowtype;
@@ -783,6 +793,16 @@ begin
       'wallet', to_jsonb(v_wallet),
       'already_refunded', v_already_refunded
     );
+  end if;
+
+  -- Preserve valid completed reports, while allowing the legacy empty-result
+  -- reconciliation to refund historical reports that never had content.
+  if v_order.status = 'completed'
+      and coalesce(btrim(v_order.result_text, E' \t\n\r'), '') not in
+        ('', 'AI 服务未返回内容。', 'AI 服务未返回内容') then
+    select * into v_wallet from wallets where user_id = v_order.user_id;
+    return jsonb_build_object('order', to_jsonb(v_order), 'wallet', to_jsonb(v_wallet),
+      'already_refunded', false, 'refund_skipped', true);
   end if;
 
   select * into v_wallet

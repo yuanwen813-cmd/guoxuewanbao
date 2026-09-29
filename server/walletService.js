@@ -343,6 +343,9 @@ async function createAiReportDebit({
     if (message.includes('INSUFFICIENT_BALANCE')) {
       throw new HttpError(402, '积分不足，请先充值后再生成');
     }
+    if (message.includes('REQUEST_ID_CONFLICT')) {
+      throw new HttpError(409, '解析内容已改变，请重新提交；原请求可在我的报告查看');
+    }
     throw new HttpError(500, 'AI 积分扣减任务创建失败', error.message);
   }
   return {
@@ -379,6 +382,9 @@ async function createQueuedAiReportDebit({
     p_request_id: requestId || crypto.randomUUID(),
   });
   if (error) {
+    if (String(error.message || '').includes('REQUEST_ID_CONFLICT')) {
+      throw new HttpError(409, '解析内容已改变，请重新提交；原请求可在我的报告查看');
+    }
     if (String(error.message || '').includes('INSUFFICIENT_BALANCE')) {
       throw new HttpError(402, '积分不足，请先充值后再生成');
     }
@@ -461,8 +467,14 @@ async function getAiReportForUser({ userId, orderId }) {
   return mapAiReportOrder(data);
 }
 
-async function listAiReportsForUser(userId) {
-  const supabase = getSupabaseServiceClient();
+async function listAiReportsForUser(userId, { page = 1, pageSize = 50, supabaseClient } = {}) {
+  const currentPage = Number(page);
+  const size = Number(pageSize);
+  if (!Number.isSafeInteger(currentPage) || currentPage < 1 || currentPage > 1000000
+      || !Number.isSafeInteger(size) || size < 1 || size > 100) {
+    throw new HttpError(400, '报告分页参数无效');
+  }
+  const supabase = supabaseClient || getSupabaseServiceClient();
   if (process.env.AI_LONG_REPORTS_ENABLED === 'true') {
     const { error: expiryError } = await supabase.rpc('expire_ai_report_jobs', {
       p_user_id: userId,
@@ -474,7 +486,8 @@ async function listAiReportsForUser(userId) {
     .select('id, product_id, report_type, price_cents, status, error_message, created_at, updated_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(50);
+    .order('id', { ascending: false })
+    .range((currentPage - 1) * size, currentPage * size - 1);
   if (error) throw new HttpError(500, '报告列表读取失败');
   return (data || []).map(mapAiReportOrder);
 }

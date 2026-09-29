@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,11 +8,17 @@ import '../auth/auth_store.dart';
 import 'server_wallet_api.dart';
 
 final walletStoreProvider = StateNotifierProvider<WalletStore, WalletState>(
-  (ref) => WalletStore(
-    api: ServerWalletApi(
-      tokenProvider: () async => ref.read(authStoreProvider).token,
-    ),
-  ),
+  (ref) {
+    final userId = ref.watch(authStoreProvider.select((auth) => auth.user?.id));
+    return WalletStore(
+      api: ServerWalletApi(
+        tokenProvider: () async {
+          final auth = ref.read(authStoreProvider);
+          return auth.user?.id == userId ? auth.token : null;
+        },
+      ),
+    );
+  },
 );
 
 class WalletState {
@@ -19,13 +26,15 @@ class WalletState {
   final String currency;
   final String? updatedAt;
   final List<WalletTransaction> transactions;
+  final bool hasTransactions;
 
   const WalletState({
     this.balanceCents = 0,
     this.currency = 'CNY',
     this.updatedAt,
-    this.transactions = const [],
-  });
+    List<WalletTransaction>? transactions,
+  })  : transactions = transactions ?? const [],
+        hasTransactions = transactions != null;
 
   WalletState copyWith({
     int? balanceCents,
@@ -61,7 +70,7 @@ class WalletState {
               .map((item) =>
                   WalletTransaction.fromJson(item as Map<String, dynamic>))
               .toList()
-          : const [],
+          : null,
     );
   }
 }
@@ -164,6 +173,25 @@ class WalletChargeResult {
 
 class WalletStore extends StateNotifier<WalletState> {
   final ServerWalletApi? _api;
+  int _session = 0;
+  int _revision = 0;
+
+  bool _isCurrent(int session) => mounted && session == _session;
+
+  void _mergeWallet(WalletState wallet) {
+    _revision++;
+    state = wallet.hasTransactions
+        ? wallet
+        : wallet.copyWith(transactions: state.transactions);
+  }
+
+  Future<void> _refreshQuietly() async {
+    try {
+      await syncFromServer();
+    } catch (_) {
+      // A refresh failure must not turn a settled report into a failed one.
+    }
+  }
 
   WalletStore({
     ServerWalletApi? api,
@@ -180,13 +208,11 @@ class WalletStore extends StateNotifier<WalletState> {
       throw ArgumentError('充值金额不能低于 1 元');
     }
     if (_api != null) {
-      final result = await createRecharge(
+      await createRecharge(
         amountCents: yuan * 100,
         provider: 'wechat',
         tradeType: 'web_native',
       );
-      state = result.wallet;
-      await _persist();
       return;
     }
     await _append(
@@ -201,8 +227,12 @@ class WalletStore extends StateNotifier<WalletState> {
   }
 
   Future<void> syncFromServer() async {
-    if (_api == null) return;
-    state = await _api.fetchWallet();
+    if (_api == null || !mounted) return;
+    final session = _session;
+    final revision = ++_revision;
+    final wallet = await _api.fetchWallet();
+    if (!_isCurrent(session) || revision != _revision) return;
+    _mergeWallet(wallet);
     await _persist();
   }
 
@@ -239,12 +269,14 @@ class WalletStore extends StateNotifier<WalletState> {
         wallet: state,
       );
     }
+    final session = _session;
     final result = await _api.createRecharge(
       amountCents: amountCents,
       provider: provider,
       tradeType: tradeType,
     );
-    state = result.wallet;
+    if (!_isCurrent(session)) return result;
+    _mergeWallet(result.wallet);
     await _persist();
     return result;
   }
@@ -263,11 +295,12 @@ class WalletStore extends StateNotifier<WalletState> {
         status: 'paid',
       );
     }
+    final session = _session;
     final order = await _api.fetchRechargeStatus(
       orderId: orderId,
       outTradeNo: outTradeNo,
     );
-    await syncFromServer();
+    if (_isCurrent(session)) await syncFromServer();
     return order;
   }
 
@@ -285,11 +318,12 @@ class WalletStore extends StateNotifier<WalletState> {
         status: 'closed',
       );
     }
+    final session = _session;
     final order = await _api.cancelRecharge(
       orderId: orderId,
       outTradeNo: outTradeNo,
     );
-    await syncFromServer();
+    if (_isCurrent(session)) await syncFromServer();
     return order;
   }
 
@@ -307,6 +341,7 @@ class WalletStore extends StateNotifier<WalletState> {
     if (_api == null) {
       throw const ServerWalletException('当前钱包未连接服务端');
     }
+    final session = _session;
     final result = await _api.generateAiReport(
       productId: productId,
       featureKey: featureKey,
@@ -318,17 +353,24 @@ class WalletStore extends StateNotifier<WalletState> {
       requestId: requestId,
       sourceJson: sourceJson,
     );
-    state = result.wallet;
+    if (!_isCurrent(session)) return result;
+    _mergeWallet(result.wallet);
     await _persist();
+    if (_isCurrent(session)) unawaited(_refreshQuietly());
     return result;
   }
 
   Future<void> replaceFromServer(WalletState wallet) async {
-    state = wallet;
+    if (!mounted) return;
+    _mergeWallet(wallet);
     await _persist();
+    if (mounted) unawaited(_refreshQuietly());
   }
 
   Future<void> clearLocalSession() async {
+    if (!mounted) return;
+    _session++;
+    _revision++;
     state = const WalletState();
     await _persist();
   }
@@ -402,17 +444,16 @@ class WalletStore extends StateNotifier<WalletState> {
 
   Future<void> _load() async {
     if (_api != null) {
-      try {
-        state = await _api.fetchWallet();
-        await _persist();
-        return;
-      } catch (_) {
-        // Use the last cached snapshot while the user is logged out or the API
-        // is still warming up. Mutating operations still require the server.
-      }
+      // Remove the pre-isolation cache; server state is always account-owned.
+      unawaited(deleteLocalJson(_storageKey).catchError((_) {}));
+      await _refreshQuietly();
+      return;
     }
+    final session = _session;
+    final revision = _revision;
     try {
       final raw = await readLocalJson(_storageKey);
+      if (!_isCurrent(session) || revision != _revision) return;
       if (raw == null || raw.isEmpty) return;
       state = WalletState.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     } catch (_) {
@@ -421,6 +462,8 @@ class WalletStore extends StateNotifier<WalletState> {
   }
 
   Future<void> _persist() async {
+    // Server wallets are not restored from a device-wide, cross-account cache.
+    if (_api != null) return;
     await writeLocalJson(_storageKey, jsonEncode(state.toJson()));
   }
 

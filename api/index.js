@@ -366,7 +366,11 @@ const routes = {
 
   'ai-report-list': handleApi(['GET'], async (req, res) => {
     const current = await requireUser(req);
-    const reports = await listAiReportsForUser(current.appUser.id);
+    const url = parseUrl(req);
+    const reports = await listAiReportsForUser(current.appUser.id, {
+      page: url.searchParams.get('page') ?? 1,
+      pageSize: url.searchParams.get('pageSize') ?? 50,
+    });
     sendJson(res, 200, { ok: true, reports });
   }),
 

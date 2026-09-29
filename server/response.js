@@ -94,7 +94,9 @@ function handleApi(allowedMethods, handler) {
       const refunded = error.details?.refunded === true
         && error.details?.report?.status === 'refunded';
       const message = refunded
-        ? (String(error.message || '').includes('解析超时')
+        ? (error.details?.deliveryReason === 'refusal_only'
+          ? `本次未完成解析，${Number(error.details.report.priceCents) / 100} 积分已退回。你可以修改问题后重新解析。`
+          : String(error.message || '').includes('解析超时')
           ? 'AI 解析超时，本次积分已自动退回。请在积分流水核对后重试。'
           : 'AI 解析失败，本次积分已自动退回。请在积分流水核对后重试。')
         : statusCode >= 500 ? '服务端处理失败，请稍后再试' : error.message;
