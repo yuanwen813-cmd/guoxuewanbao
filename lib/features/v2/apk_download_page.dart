@@ -13,7 +13,7 @@ class ApkDownloadPage extends StatelessWidget {
 
   static const apkPath = '/downloads/guoxuewanbao-latest.apk';
   static const apkFileName = 'guoxuewanbao-latest.apk';
-  static const apkVersionLabel = 'Android 测试版 · 1.0.0（构建 2）';
+  static const apkVersionLabel = 'Android 测试版 · 1.0.0（构建 5）';
   static const estimatedSize = '实际大小以下载文件为准';
 
   @override

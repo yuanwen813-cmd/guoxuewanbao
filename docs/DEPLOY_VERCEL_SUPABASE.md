@@ -301,6 +301,8 @@ ARK_TIMEOUT_MS=270000
 
 ### 本机 Android 打包环境（2026-09-28 核对）
 
+2026-09-30 更新：使用下列原有环境构建 `1.0.0+5`，官网固定下载文件已替换为构建 5，下载页版本文案同步。APK 大小 24,085,544 字节，SHA-256 为 `311612e2e15fce0d86eaf447ec0e995b98081a0eb3f1922832dc6b8bf6e8895d`；包名保持 `com.guoxue.wanbaoxia`，最低 Android 5.0，签名证书与构建 4 一致，可以覆盖安装。包含最新解析重试、修改问题和钱包显示修复。构建通过，保留已有 Kotlin 元数据兼容性与 Cupertino 字体提示；本次只验证打包、版本和签名，实机业务由用户验收。仍使用原测试签名，不是应用市场正式签名。
+
 - 上周成功构建所用的 Gradle 用户目录是 `D:\AIProjects\.local-build-tools\gradle-user-home`，不是 `C:\Users\Administrator\.gradle`，也不是 `D:\AIProjects\tool\gradle-home-points*`。该目录包含 Gradle 7.6.3 与 Android/Kotlin 插件缓存。
 - 对应 JDK 17 位于 `D:\AIProjects\.local-build-tools\jdk-17\jdk-17.0.20.1+1`；Android SDK 位于 `C:\Users\Administrator\AppData\Local\Android\Sdk`；Flutter 位于 `D:\flutter`。
 - PowerShell 构建时先设置 `$env:JAVA_HOME`、`$env:GRADLE_USER_HOME`、`$env:ANDROID_SDK_ROOT`，并把 `$env:JAVA_HOME\bin` 放在 `PATH` 前面，然后执行 `D:\flutter\bin\flutter.bat build apk --release --no-pub --dart-define=GUOXUE_API_BASE_URL=https://guoxuewanbao.cn`。
