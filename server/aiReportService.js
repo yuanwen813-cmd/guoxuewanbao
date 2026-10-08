@@ -1,10 +1,10 @@
 const { HttpError } = require('./response');
 const crypto = require('crypto');
+const { waitUntil } = require('@vercel/functions');
 const { getAiProduct } = require('./productCatalog');
 const {
   completeAiReport,
   createAiReportDebit,
-  createQueuedAiReportDebit,
   getAiReportForUser,
   getWallet,
   reconcileEmptyAiReportsForUser,
@@ -15,6 +15,7 @@ const { normalizeReportUserPrompt } = require('./aiReportInput');
 const { ensureDeliveredAiReport } = require('./aiReportQuality');
 const { recordServiceEventQuietly } = require('./monitoringService');
 const { callDoubao, getDoubaoConfig } = require('./doubaoClient');
+const { cloudPollingEnabled } = require('./aiReportMode');
 
 function maxPromptChars() {
   return Math.max(1000, Number(process.env.AI_PROMPT_MAX_CHARS || 16000));
@@ -123,26 +124,6 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
   }
   const requestId = body.requestId || crypto.randomUUID();
 
-  if (process.env.AI_LONG_REPORTS_ENABLED === 'true'
-      && /^(bazi|ziwei|tieban)_/.test(product.reportType)) {
-    const queueReport = dependencies.createQueuedAiReportDebit || createQueuedAiReportDebit;
-    const queued = await queueReport({
-      userId, product, inputSnapshotJson, baziChartJson, questionResultJson,
-      promptSnapshot, userPrompt, systemPrompt, requestId,
-    });
-    if (queued.order.status === 'refunded' || queued.order.status === 'failed') {
-      throw new HttpError(409, '这次解析已失败并退回积分，请重新提交');
-    }
-    return {
-      pending: queued.order.status === 'generating',
-      answer: queued.order.resultText || '',
-      model: providerConfig?.model || product.model,
-      report: queued.order,
-      wallet: queued.wallet,
-      alreadyPending: queued.alreadyPending,
-    };
-  }
-
   const debit = await debitReport({
     userId,
     product,
@@ -167,100 +148,141 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
     };
   }
 
-  let ai;
-  let answer;
-  try {
-    ai = await requestAi({
-      product,
-      systemPrompt,
-      userPrompt,
-      config: providerConfig,
-    });
-    answer = addReportNotice(ai.answer, product);
-  } catch (error) {
-    const refunded = await refundReport({
-      orderId: debit.order.id,
-      errorMessage: error.message || 'AI 调用失败，积分已自动退回',
-      model: product.model,
-    });
-    if (refunded.order.status === 'completed') {
-      return {
-        answer: refunded.order.resultText,
+  const finish = async () => {
+    let ai;
+    let answer;
+    try {
+      ai = await requestAi({
+        product,
+        systemPrompt,
+        userPrompt,
+        config: providerConfig,
+      });
+      answer = addReportNotice(ai.answer, product);
+    } catch (error) {
+      const refunded = await refundReport({
+        orderId: debit.order.id,
+        errorMessage: error.message || 'AI 调用失败，积分已自动退回',
         model: product.model,
-        report: refunded.order,
-        wallet: refunded.wallet,
-        alreadyPending: true,
+      });
+      if (refunded.order.status === 'completed') {
+        return {
+          answer: refunded.order.resultText,
+          model: product.model,
+          report: refunded.order,
+          wallet: refunded.wallet,
+          alreadyPending: true,
+        };
+      }
+      recordMonitoringEvent({
+        category: 'ai',
+        eventType: 'ai_report_refunded',
+        severity: 'error',
+        message: 'AI 解析失败，积分已自动退回',
+        userId,
+        context: {
+          productId: product.id,
+          orderId: debit.order.id,
+          statusCode: error.statusCode || 500,
+        },
+      });
+      const statusCode = error.statusCode && error.statusCode < 500
+        ? error.statusCode
+        : 500;
+      throw new HttpError(
+        statusCode,
+        `${error.message || 'AI 调用失败'}，本次积分已自动退回`,
+        {
+          wallet: refunded.wallet,
+          report: refunded.order,
+          refunded: true,
+          deliveryReason: error.details?.deliveryReason,
+        },
+      );
+    }
+
+    // Saving can commit even when its HTTP response is lost. Retry only the
+    // idempotent settlement, never the AI request or the debit.
+    let settled;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        settled = await completeReport({
+          orderId: debit.order.id, resultText: answer, model: ai.model, usage: ai.usage,
+        });
+        break;
+      } catch (_) {
+        try {
+          const report = await (dependencies.getAiReportForUser || getAiReportForUser)({
+            userId, orderId: debit.order.id,
+          });
+          if (report.status !== 'generating' && report.status !== 'pending') {
+            let wallet = debit.wallet;
+            try { wallet = await (dependencies.getWallet || getWallet)(userId); } catch (_) { /* Next wallet refresh reconciles this. */ }
+            settled = { order: report, wallet };
+            break;
+          }
+        } catch (_) { /* An unavailable database is not proof of a failed task. */ }
+      }
+    }
+    if (!settled) {
+      recordMonitoringEvent({
+        category: 'ai', eventType: 'ai_report_settlement_uncertain', severity: 'error',
+        message: 'AI 报告保存状态待核对，未执行盲目退款', userId,
+        context: { orderId: debit.order.id, productId: product.id },
+      });
+      return {
+        pending: true, answer: '', model: ai.model,
+        report: debit.order, wallet: debit.wallet,
       };
     }
-    recordMonitoringEvent({
-      category: 'ai',
-      eventType: 'ai_report_refunded',
-      severity: 'error',
-      message: 'AI 解析失败，积分已自动退回',
-      userId,
-      context: {
-        productId: product.id,
-        orderId: debit.order.id,
-        statusCode: error.statusCode || 500,
-      },
-    });
-    const statusCode = error.statusCode && error.statusCode < 500
-      ? error.statusCode
-      : 500;
-    throw new HttpError(
-      statusCode,
-      `${error.message || 'AI 调用失败'}，本次积分已自动退回`,
-      {
-        wallet: refunded.wallet,
-        report: refunded.order,
-        refunded: true,
-        deliveryReason: error.details?.deliveryReason,
-      },
-    );
-  }
-
-  // Saving can commit even when its HTTP response is lost. Retry only the
-  // idempotent settlement, never the AI request or the debit.
-  let settled;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      settled = await completeReport({
-        orderId: debit.order.id, resultText: answer, model: ai.model, usage: ai.usage,
+    if (settled.order.status === 'refunded' || settled.order.status === 'failed') {
+      throw new HttpError(409, '本次解析已结束并退回积分，请重新提交', {
+        report: settled.order, wallet: settled.wallet, refunded: true,
       });
-      break;
-    } catch (_) {
-      try {
-        const report = await (dependencies.getAiReportForUser || getAiReportForUser)({
-          userId, orderId: debit.order.id,
-        });
-        if (report.status !== 'generating' && report.status !== 'pending') {
-          let wallet = debit.wallet;
-          try { wallet = await (dependencies.getWallet || getWallet)(userId); } catch (_) { /* Next wallet refresh reconciles this. */ }
-          settled = { order: report, wallet };
-          break;
-        }
-      } catch (_) { /* An unavailable database is not proof of a failed task. */ }
     }
-  }
-  if (!settled) {
-    recordMonitoringEvent({
-      category: 'ai', eventType: 'ai_report_settlement_uncertain', severity: 'error',
-      message: 'AI 报告保存状态待核对，未执行盲目退款', userId,
-      context: { orderId: debit.order.id, productId: product.id },
-    });
     return {
-      pending: true, answer: '', model: ai.model,
-      report: debit.order, wallet: debit.wallet,
+      answer: settled.order.resultText || answer,
+      model: ai.model, report: settled.order, wallet: settled.wallet,
     };
-  }
-  if (settled.order.status === 'refunded' || settled.order.status === 'failed') {
-    throw new HttpError(409, '本次解析已结束并退回积分，请重新提交', {
-      report: settled.order, wallet: settled.wallet, refunded: true,
+  };
+
+  if (!cloudPollingEnabled()) return finish();
+
+  // Register before starting the model request. The promise is owned by this
+  // Vercel invocation, including after its HTTP response has been sent.
+  let start;
+  const background = new Promise((resolve) => { start = resolve; })
+    .then((registered) => registered ? finish() : undefined)
+    .catch((error) => {
+      recordMonitoringEvent({
+        category: 'ai', eventType: 'ai_cloud_report_failed', severity: 'error',
+        message: error.details?.refunded
+          ? '云端解析失败，积分已自动退回'
+          : '云端解析结算状态待核对',
+        userId,
+        context: {
+          orderId: debit.order.id, productId: product.id,
+          statusCode: error.statusCode || 500,
+        },
+      });
+    });
+  try {
+    (dependencies.waitUntil || waitUntil)(background);
+  } catch (_) {
+    start(false);
+    const refunded = await refundReport({
+      orderId: debit.order.id, model: product.model,
+      errorMessage: '云端解析任务未能启动，积分已自动退回',
+    });
+    throw new HttpError(503, '云端解析任务未能启动，请稍后重试', {
+      report: refunded.order, wallet: refunded.wallet,
+      refunded: refunded.order.status === 'refunded',
     });
   }
+  start(true);
   return {
-    answer: settled.order.resultText || answer,
-    model: ai.model, report: settled.order, wallet: settled.wallet,
+    pending: true, answer: '', model: providerConfig?.model || product.model,
+    report: debit.order, wallet: debit.wallet, alreadyPending: false,
   };
 }
 

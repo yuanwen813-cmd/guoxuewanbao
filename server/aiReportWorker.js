@@ -5,8 +5,7 @@ const { getAiProduct } = require('./productCatalog');
 
 const pollMs = Math.max(1000, Number(process.env.AI_WORKER_POLL_MS || 5000));
 const reconcileMs = 5 * 60 * 1000;
-const longTimeoutMs = Math.min(1800000,
-  Math.max(270000, Number(process.env.ARK_LONG_TIMEOUT_MS || 1800000)));
+const longTimeoutMs = 15 * 60 * 1000;
 
 async function rpc(supabase, name, args = {}) {
   const { data, error } = await supabase.rpc(name, args);
@@ -32,16 +31,21 @@ async function processJob(job, { supabase, requestAi, config }) {
   try {
     const product = getAiProduct(job.product_id);
     if (!product) throw new Error('AI 产品配置不存在');
+    const deadline = job.deadline_at ? Date.parse(job.deadline_at) : Date.now() + longTimeoutMs;
+    const remainingMs = Math.min(longTimeoutMs, deadline - Date.now());
+    if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
+      throw new Error('AI 解析执行超过15分钟，积分已自动退回');
+    }
     const ai = await requestAi({
       systemPrompt: job.system_prompt,
       userPrompt: job.user_prompt,
-      config,
+      config: { ...config, timeoutMs: remainingMs },
     });
     resultText = addReportNotice(ai.answer, product);
     model = ai.model;
     usage = ai.usage;
   } catch (error) {
-    errorMessage = error.message || 'AI 解析失败，费用已自动退回';
+    errorMessage = error.message || 'AI 解析失败，积分已自动退回';
     console.warn('AI job generation failed', {
       orderId, statusCode: error.statusCode || 500,
       message: errorMessage,
@@ -68,7 +72,6 @@ async function processJob(job, { supabase, requestAi, config }) {
 async function runWorker({ supabase, requestAi = callDoubaoStream, idleMs = pollMs } = {}) {
   const client = supabase || getSupabaseServiceClient();
   const config = { ...getDoubaoConfig(), timeoutMs: longTimeoutMs };
-  if (!Number.isFinite(config.timeoutMs)) throw new Error('Invalid ARK_LONG_TIMEOUT_MS');
   let stopping = false;
   let lastReconcileAt = 0;
   process.once('SIGTERM', () => { stopping = true; });

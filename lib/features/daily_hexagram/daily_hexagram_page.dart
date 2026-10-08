@@ -15,9 +15,13 @@ import '../../shared/disclaimer/disclaimer_block.dart';
 import '../../shared/widgets/classical_card.dart';
 import '../../shared/widgets/guoxue_button.dart';
 import '../../shared/widgets/yinyang_loader.dart';
+import '../auth/auth_store.dart';
+import '../wallet/server_wallet_api.dart';
+import '../ai_reports/ai_report_product_config.dart';
 
 class DailyHexagramPage extends ConsumerStatefulWidget {
-  const DailyHexagramPage({super.key});
+  final ServerWalletApi? api;
+  const DailyHexagramPage({super.key, this.api});
   @override
   ConsumerState<DailyHexagramPage> createState() => _DailyHexagramPageState();
 }
@@ -25,7 +29,7 @@ class DailyHexagramPage extends ConsumerStatefulWidget {
 class _DailyHexagramPageState extends ConsumerState<DailyHexagramPage> {
   final _hexRepo = HexagramRepository();
   final _yaoRepo = YaoRepository();
-  late final DailyHexagramEngine _engine;
+  late DailyHexagramEngine _engine;
   static const _question = '今日整体运势如何？';
   static const _aiTemp = 0.3;
 
@@ -46,6 +50,8 @@ class _DailyHexagramPageState extends ConsumerState<DailyHexagramPage> {
   Map<String, dynamic>? _finalResult;
   String? _aiSystemPrompt;
   String? _aiUserPrompt;
+  int _initGeneration = 0;
+  String? _ownerId;
 
   @override
   void initState() {
@@ -54,11 +60,15 @@ class _DailyHexagramPageState extends ConsumerState<DailyHexagramPage> {
   }
 
   Future<void> _init() async {
+    final generation = ++_initGeneration;
+    final ownerId = ref.read(authStoreProvider).user?.id;
+    _ownerId = ownerId;
     await _hexRepo.init();
     await _yaoRepo.init();
+    if (!mounted || generation != _initGeneration) return;
     _engine = DailyHexagramEngine(hexRepo: _hexRepo, yaoRepo: _yaoRepo);
     _localUserId = await _getOrCreateUserId();
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc().add(const Duration(hours: 8));
     _dateKey =
         '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     _dailySeed = '${_localUserId}_$_dateKey';
@@ -69,7 +79,41 @@ class _DailyHexagramPageState extends ConsumerState<DailyHexagramPage> {
       _commonResult =
           CommonDivinationResult.fromJson(_todayRecord!.resultSnapshot);
     }
-    if (mounted) setState(() => _loading = false);
+    if (ownerId != null) {
+      try {
+        final api = widget.api ??
+            ServerWalletApi(
+                tokenProvider: () async => ref.read(authStoreProvider).token);
+        final report = await api.fetchTodayDailyReport();
+        if (!mounted ||
+            generation != _initGeneration ||
+            ref.read(authStoreProvider).user?.id != ownerId) return;
+        if (report != null && report.source['featureId'] == 'daily_hexagram') {
+          _commonResult = CommonDivinationResult.fromJson(report.source);
+          if (report.status == 'completed' &&
+              report.resultText?.isNotEmpty == true) {
+            final config =
+                AiReportProductCatalog.forFeature('daily_hexagram').single;
+            _commonResult = _commonResult!.copyWithAiReport(AiReportSnapshot(
+              productId: report.productId,
+              featureKey: 'daily_hexagram',
+              title: config.buttonTitle,
+              reportType: config.reportType,
+              priceLabel: config.priceLabel,
+              text: report.resultText!,
+              reportId: report.id,
+              createdAt: report.createdAt ?? DateTime.now(),
+            ));
+          }
+          _saveToHistory();
+        }
+      } catch (_) {
+        // The report panel separately checks the server before offering a new analysis.
+      }
+    }
+    if (mounted && generation == _initGeneration) {
+      setState(() => _loading = false);
+    }
   }
 
   Future<String> _getOrCreateUserId() async {
@@ -90,10 +134,12 @@ class _DailyHexagramPageState extends ConsumerState<DailyHexagramPage> {
 
   Future<void> _drawDaily() async {
     if (_todayRecord != null) return; // Already drawn
+    final generation = _initGeneration;
     setState(() => _loading = true);
 
     // Brief animation delay
     await Future.delayed(const Duration(milliseconds: 1500));
+    if (!mounted || generation != _initGeneration) return;
 
     // Cast (cached)
     _castResult = _engine.cast(dailySeed: _dailySeed, dateKey: _dateKey);
@@ -158,8 +204,9 @@ class _DailyHexagramPageState extends ConsumerState<DailyHexagramPage> {
   void _saveToHistory() {
     if (_commonResult == null) return;
     final cr = _commonResult!;
+    final existing = _findTodayRecord();
     final record = DivinationHistory(
-      id: 'daily_$_dateKey',
+      id: existing?.id ?? 'daily_$_dateKey',
       featureId: cr.featureId,
       featureName: cr.featureName,
       question: _question,
@@ -168,11 +215,11 @@ class _DailyHexagramPageState extends ConsumerState<DailyHexagramPage> {
       resultJson: const JsonEncoder().convert(
           {'dateKey': _dateKey, 'dailySeed': _dailySeed, ...cr.toJson()}),
       tags: cr.tags ?? [],
+      isFavorite: existing?.isFavorite ?? false,
     );
-    // Remove old daily record for today first
-    final existing = _findTodayRecord();
-    if (existing != null) ref.read(historyServiceProvider).delete(existing.id);
+    // save replaces the same ID without racing a cloud deletion against an upsert.
     ref.read(historyServiceProvider).save(record);
+    _todayRecord = record;
   }
 
   // ignore: unused_element
@@ -369,8 +416,21 @@ class _DailyHexagramPageState extends ConsumerState<DailyHexagramPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AuthState>(authStoreProvider, (_, next) {
+      if (next.user?.id == _ownerId) return;
+      setState(() {
+        _commonResult = null;
+        _todayRecord = null;
+        _castResult = null;
+        _finalResult = null;
+        _loading = true;
+      });
+      _init();
+    });
     if (_commonResult != null) {
       return CommonDivinationResultPage(
+        api: widget.api,
+        key: ValueKey('daily_${_ownerId ?? 'guest'}_$_dateKey'),
         result: _commonResult!,
         onShare: _shareResult,
         onRetry: null,

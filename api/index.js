@@ -38,6 +38,7 @@ const {
   cancelRechargeOrderForUser,
   getRechargeOrderForUser,
   getWallet,
+  getTodayDailyReport,
   listAiReportsForUser,
   listWalletTransactions,
 } = require('../server/walletService');
@@ -349,6 +350,11 @@ const routes = {
       report: result.report,
       wallet: result.wallet,
     });
+  }),
+
+  'ai-report-daily': handleApi(['GET'], async (req, res) => {
+    const current = await requireUser(req);
+    sendJson(res, 200, { ok: true, report: await getTodayDailyReport(current.appUser.id) });
   }),
 
   'ai-report-detail': handleApi(['GET'], async (req, res) => {

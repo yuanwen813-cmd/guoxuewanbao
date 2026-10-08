@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../auth/auth_store.dart';
 import '../wallet/server_wallet_api.dart';
-import '../wallet/wallet_store.dart';
+import 'ai_report_detail_sheet.dart';
 
 class MyReportsPage extends ConsumerStatefulWidget {
   final ServerWalletApi? api;
@@ -126,38 +126,11 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
       await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        builder: (context) => SafeArea(
-          child: FractionallySizedBox(
-            heightFactor: 0.85,
-            child: Column(
-              children: [
-                ListTile(
-                  title: Text(_title(report.productId)),
-                  trailing: IconButton(
-                    tooltip: '关闭',
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(20),
-                    children: [
-                      if (report.status == 'completed' &&
-                          report.resultText?.trim().isNotEmpty == true)
-                        SelectableText(report.resultText!)
-                      else if (report.status == 'generating')
-                        const Text('报告正在生成。完成后会保存在这里，请稍后刷新。')
-                      else
-                        Text(report.status == 'refunded'
-                            ? '本次解析未完成，${formatPointsCenti(report.priceCents)}已自动退回。'
-                            : '报告未生成，请稍后重试。'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+        builder: (context) => AiReportDetailSheet(
+          api: _api,
+          report: report,
+          title: _title(report.productId),
+          ownerId: userId!,
         ),
       );
     } catch (_) {
@@ -170,6 +143,7 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
   }
 
   String _title(String productId) {
+    if (productId == 'daily_hexagram_brief') return '每日一卦 AI 解析';
     if (productId.startsWith('bazi')) return '八字命理 AI 解析';
     if (productId.startsWith('ziwei')) return '紫微斗数 AI 解析';
     if (productId.startsWith('tieban')) return '铁板神数 AI 解析';

@@ -224,6 +224,21 @@ class ServerWalletApi {
     }
   }
 
+  Future<ServerAiReport?> fetchTodayDailyReport() async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/ai-report-daily',
+        options: await _authOptions(),
+      );
+      final data = response.data?['report'];
+      return data is Map<String, dynamic>
+          ? ServerAiReport.fromJson(data)
+          : null;
+    } on DioException catch (error) {
+      throw ServerWalletException.fromDio(error);
+    }
+  }
+
   Future<Options> _authOptions() async {
     final token = await _tokenProvider?.call();
     if (token == null || token.isEmpty) {
@@ -284,6 +299,7 @@ class ServerAiReport {
   final String? resultText;
   final String? errorMessage;
   final DateTime? createdAt;
+  final Map<String, dynamic> source;
 
   const ServerAiReport({
     required this.id,
@@ -293,6 +309,7 @@ class ServerAiReport {
     this.resultText,
     this.errorMessage,
     this.createdAt,
+    this.source = const {},
   });
 
   factory ServerAiReport.fromJson(Map<String, dynamic> json) => ServerAiReport(
@@ -303,6 +320,9 @@ class ServerAiReport {
         resultText: json['resultText'] as String?,
         errorMessage: json['errorMessage'] as String?,
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+        source: json['source'] is Map<String, dynamic>
+            ? json['source'] as Map<String, dynamic>
+            : const {},
       );
 }
 

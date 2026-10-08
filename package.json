@@ -5,13 +5,15 @@
   "type": "commonjs",
   "scripts": {
     "worker:ai": "node server/aiReportWorker.js",
-    "check:api": "node --check api/index.js && node --check server/auth.js && node --check server/adminService.js && node --check server/aliyunSms.js && node --check server/promptLoader.js && node --check server/aiReportInput.js && node --check server/aiReportQuality.js && node --check server/aiReportService.js && node --check server/aiReportWorker.js && node --check server/doubaoClient.js && node --check server/paymentService.js && node --check server/walletService.js && node --check server/monitoringService.js && node --check server/userDataService.js",
-    "test:server": "node test/server_ai_report_service_test.js && node test/server_ai_report_worker_test.js && node test/server_doubao_client_test.js && node test/server_user_data_export_test.js && node test/server_payment_wallet_service_test.js && node test/server_monitoring_service_test.js && node test/server_points_test.js && node test/server_report_regression_test.js && node test/server_ai_report_delivery_test.js"
+    "check:api": "node --check api/index.js && node --check server/auth.js && node --check server/adminService.js && node --check server/aliyunSms.js && node --check server/promptLoader.js && node --check server/aiReportInput.js && node --check server/aiReportQuality.js && node --check server/aiReportService.js && node --check server/aiReportWorker.js && node --check server/doubaoClient.js && node --check server/paymentService.js && node --check server/walletService.js && node --check server/monitoringService.js && node --check server/userDataService.js && node --check server/aiReportMode.js",
+    "test:server": "node test/server_ai_report_service_test.js && node test/server_ai_report_worker_test.js && node test/server_doubao_client_test.js && node test/server_user_data_export_test.js && node test/server_payment_wallet_service_test.js && node test/server_monitoring_service_test.js && node test/server_points_test.js && node test/server_report_regression_test.js && node test/server_ai_report_delivery_test.js && node test/server_all_async_test.js && node test/server_cloud_polling_test.js",
+    "test:async-sql": "node test/server_all_async_sql_test.js && node test/server_cloud_polling_sql_test.js && node test/server_cloud_polling_sql_test.js --from-legacy"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^4.6.0",
     "@alicloud/openapi-client": "^0.4.15",
-    "@supabase/supabase-js": "^2.45.4"
+    "@supabase/supabase-js": "^2.45.4",
+    "@vercel/functions": "3.9.11"
   },
   "engines": {
     "node": ">=20"

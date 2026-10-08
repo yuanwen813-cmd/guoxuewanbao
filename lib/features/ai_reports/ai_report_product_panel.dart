@@ -17,6 +17,7 @@ import '../wallet/server_wallet_api.dart';
 import '../wallet/wallet_store.dart';
 import 'ai_report_product_config.dart';
 import 'ai_report_prompt_builder.dart';
+import 'ai_report_content.dart';
 
 class AiReportProductPanel extends ConsumerStatefulWidget {
   final String featureKey;
@@ -25,6 +26,7 @@ class AiReportProductPanel extends ConsumerStatefulWidget {
   final String? initialFocus;
   final List<AiReportSnapshot> initialReports;
   final ValueChanged<AiReportSnapshot>? onReportGenerated;
+  final ServerWalletApi? api;
 
   const AiReportProductPanel({
     super.key,
@@ -34,6 +36,7 @@ class AiReportProductPanel extends ConsumerStatefulWidget {
     this.initialFocus,
     this.initialReports = const [],
     this.onReportGenerated,
+    this.api,
   });
 
   @override
@@ -57,6 +60,14 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
   Timer? _reportPoll;
   String? _loadingProductId;
   String? _visibleUserId;
+  bool _restoringDaily = false;
+  bool _dailyReadFailed = false;
+  int _dailyReadGeneration = 0;
+
+  ServerWalletApi get _api =>
+      widget.api ??
+      ServerWalletApi(
+          tokenProvider: () async => ref.read(authStoreProvider).token);
 
   @override
   void initState() {
@@ -64,6 +75,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
     _visibleUserId = ref.read(authStoreProvider).user?.id;
     _applyInitialFocus();
     _applyInitialReports();
+    unawaited(_restoreDailyReport());
     unawaited(_recoverLegacyEmptyResponses());
     _reportPoll = Timer.periodic(const Duration(seconds: 20), (_) {
       if (_pendingReportIds.isNotEmpty) unawaited(_refreshPendingReports());
@@ -93,9 +105,7 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
 
   Future<void> _refreshPendingReports() async {
     final userId = ref.read(authStoreProvider).user?.id;
-    final api = ServerWalletApi(
-      tokenProvider: () async => ref.read(authStoreProvider).token,
-    );
+    final api = _api;
     for (final entry in Map<String, String>.from(_pendingReportIds).entries) {
       try {
         final report = await api.fetchAiReportDetail(entry.value);
@@ -141,6 +151,60 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
         }
       } catch (_) {
         // Keep the pending report ID so the next poll can retry safely.
+      }
+    }
+  }
+
+  Future<void> _restoreDailyReport() async {
+    if (widget.featureKey != AiReportFeatureKeys.dailyHexagram) return;
+    final userId = ref.read(authStoreProvider).user?.id;
+    if (userId == null) return;
+    final generation = ++_dailyReadGeneration;
+    _restoringDaily = true;
+    _dailyReadFailed = false;
+    try {
+      final report = await _api.fetchTodayDailyReport();
+      if (!mounted ||
+          generation != _dailyReadGeneration ||
+          ref.read(authStoreProvider).user?.id != userId) return;
+      if (report == null) return;
+      final config =
+          AiReportProductCatalog.forFeature(widget.featureKey).single;
+      setState(() {
+        if (report.status == 'completed' &&
+            report.resultText?.isNotEmpty == true) {
+          _answers[config.id] = report.resultText!;
+          _reportIds[config.id] = report.id;
+        } else if (report.status == 'generating') {
+          _pendingReportIds[config.id] = report.id;
+          _pendingConfigs[config.id] = config;
+          _pendingFocus[config.id] = widget.initialFocus ?? '';
+        }
+      });
+      if (report.status == 'completed' &&
+          report.resultText?.isNotEmpty == true) {
+        widget.onReportGenerated?.call(AiReportSnapshot(
+          productId: config.id,
+          featureKey: config.featureKey,
+          title: config.buttonTitle,
+          reportType: config.reportType,
+          priceLabel: config.priceLabel,
+          text: report.resultText!,
+          reportId: report.id,
+          createdAt: report.createdAt ?? DateTime.now(),
+        ));
+      }
+    } catch (_) {
+      if (mounted &&
+          generation == _dailyReadGeneration &&
+          ref.read(authStoreProvider).user?.id == userId) {
+        _dailyReadFailed = true;
+      }
+    } finally {
+      if (mounted &&
+          generation == _dailyReadGeneration &&
+          ref.read(authStoreProvider).user?.id == userId) {
+        setState(() => _restoringDaily = false);
       }
     }
   }
@@ -231,7 +295,11 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
         _savedConfigs.clear();
         _legacyEmptyResponseProducts.clear();
         _loadingProductId = null;
+        _dailyReadGeneration++;
+        _restoringDaily = false;
+        _dailyReadFailed = false;
       });
+      unawaited(_restoreDailyReport());
     });
     final configs = AiReportProductCatalog.forFeature(widget.featureKey);
     if (configs.isEmpty) return const SizedBox.shrink();
@@ -329,13 +397,26 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
             ),
           ),
           const SizedBox(height: 12),
+          if (_restoringDaily) const LinearProgressIndicator(),
+          if (_dailyReadFailed)
+            TextButton.icon(
+              onPressed: () {
+                setState(() => _restoringDaily = true);
+                _restoreDailyReport();
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('今日报告读取失败，点击重新读取'),
+            ),
           for (final config in visibleConfigs)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _AiReportProductTile(
                 config: config,
                 loading: _loadingProductId == config.id,
-                busy: _loadingProductId != null || _pendingReportIds.isNotEmpty,
+                busy: _loadingProductId != null ||
+                    _pendingReportIds.isNotEmpty ||
+                    _restoringDaily ||
+                    _dailyReadFailed,
                 answer: _answers[config.id],
                 error: _errors[config.id],
                 reportId: _reportIds[config.id],
@@ -367,6 +448,8 @@ class _AiReportProductPanelState extends ConsumerState<AiReportProductPanel> {
 
   Future<void> _generateReport(AiReportProductConfig config) async {
     if (_loadingProductId != null ||
+        _restoringDaily ||
+        _dailyReadFailed ||
         _pendingReportIds.isNotEmpty ||
         _answers.values.any((text) => text.isNotEmpty)) {
       return;
@@ -690,14 +773,7 @@ class _AiReportProductTile extends StatelessWidget {
           ],
           if (answer != null) ...[
             const SizedBox(height: 10),
-            SelectableText(
-              answer!,
-              style: GuoXueTypography.caption.copyWith(
-                color: GuoXueColors.inkGray,
-                letterSpacing: 0,
-                height: 1.55,
-              ),
-            ),
+            AiReportContent(text: answer!),
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,

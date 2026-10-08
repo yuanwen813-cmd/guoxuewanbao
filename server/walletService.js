@@ -389,12 +389,12 @@ async function createQueuedAiReportDebit({
       throw new HttpError(402, '积分不足，请先充值后再生成');
     }
     if (String(error.message || '').includes('AI_REPORT_ALREADY_GENERATING')) {
-      throw new HttpError(409, '已有同类命盘报告正在生成，请在“我的报告”查看完成后再提交');
+      throw new HttpError(409, '已有同类报告正在生成，请在“我的报告”查看完成后再提交');
     }
     if (String(error.message || '').includes('AI_WORKER_UNAVAILABLE')) {
-      throw new HttpError(503, '命盘解析服务暂未就绪，本次未扣积分，请稍后再试');
+      throw new HttpError(503, '解析服务暂未就绪，本次未扣积分，请稍后再试');
     }
-    throw new HttpError(503, '长报告服务暂不可用，本次未扣积分');
+    throw new HttpError(503, '解析任务提交状态暂无法确认，请在“我的报告”查看；重试不会重复扣积分');
   }
   return {
     order: mapAiReportOrder(data.order),
@@ -451,12 +451,6 @@ async function refundAiReport({
 
 async function getAiReportForUser({ userId, orderId }) {
   const supabase = getSupabaseServiceClient();
-  if (process.env.AI_LONG_REPORTS_ENABLED === 'true') {
-    const { error: expiryError } = await supabase.rpc('expire_ai_report_jobs', {
-      p_user_id: userId,
-    });
-    if (expiryError) throw new HttpError(503, '报告状态暂时无法确认，请稍后重试');
-  }
   const { data, error } = await supabase
     .from('ai_report_orders')
     .select('*')
@@ -475,12 +469,10 @@ async function listAiReportsForUser(userId, { page = 1, pageSize = 50, supabaseC
     throw new HttpError(400, '报告分页参数无效');
   }
   const supabase = supabaseClient || getSupabaseServiceClient();
-  if (process.env.AI_LONG_REPORTS_ENABLED === 'true') {
-    const { error: expiryError } = await supabase.rpc('expire_ai_report_jobs', {
-      p_user_id: userId,
-    });
-    if (expiryError) throw new HttpError(503, '报告状态暂时无法确认，请稍后重试');
-  }
+  const { error: expiryError } = await supabase.rpc('expire_stale_inline_ai_reports', {
+    p_user_id: userId,
+  });
+  if (expiryError) throw new HttpError(503, '报告状态暂时无法确认，请稍后重试');
   const { data, error } = await supabase
     .from('ai_report_orders')
     .select('id, product_id, report_type, price_cents, status, error_message, created_at, updated_at')
@@ -492,6 +484,16 @@ async function listAiReportsForUser(userId, { page = 1, pageSize = 50, supabaseC
   return (data || []).map(mapAiReportOrder);
 }
 
+async function getTodayDailyReport(userId, { supabaseClient } = {}) {
+  const supabase = supabaseClient || getSupabaseServiceClient();
+  const { data, error } = await supabase.rpc('get_today_daily_ai_report', {
+    p_user_id: userId,
+  });
+  if (error) throw new HttpError(503, '今日解析暂时无法读取，请稍后重试');
+  if (!data) return null;
+  return { ...mapAiReportOrder(data), source: data.question_result_json || {} };
+}
+
 module.exports = {
   cancelRechargeOrderForUser,
   createAiReportDebit,
@@ -500,6 +502,7 @@ module.exports = {
   createRechargeOrder,
   grantRegistrationBonusIfEligible,
   getAiReportForUser,
+  getTodayDailyReport,
   getRechargeOrderForUser,
   getWallet,
   isInvalidAiReportText,

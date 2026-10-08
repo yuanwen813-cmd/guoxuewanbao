@@ -13,6 +13,7 @@ import '../../shared/widgets/classical_card.dart';
 import '../../shared/widgets/guoxue_button.dart';
 import '../ai_reports/ai_report_product_config.dart';
 import '../ai_reports/ai_report_product_panel.dart';
+import '../wallet/server_wallet_api.dart';
 
 /// 通用占卜结果页 —— 所有国学功能复用
 class CommonDivinationResultPage extends ConsumerStatefulWidget {
@@ -25,6 +26,7 @@ class CommonDivinationResultPage extends ConsumerStatefulWidget {
   final VoidCallback? onDebugExport;
   final bool showDebugButton;
   final bool aiInterpreting;
+  final ServerWalletApi? api;
 
   const CommonDivinationResultPage({
     super.key,
@@ -37,6 +39,7 @@ class CommonDivinationResultPage extends ConsumerStatefulWidget {
     this.onDebugExport,
     this.showDebugButton = false,
     this.aiInterpreting = false,
+    this.api,
   });
 
   static String buildShareText(CommonDivinationResult r) =>
@@ -358,6 +361,7 @@ class _CommonDivinationResultPageState
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: AiReportProductPanel(
+            api: widget.api,
             featureKey: aiReportFeatureKey,
             initialFocus: result.userQuestion,
             sourceSummary: result.summary,

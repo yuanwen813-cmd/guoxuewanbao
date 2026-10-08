@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+process.env.AI_CLOUD_POLLING_ENABLED = 'false';
 const { assessAiReport } = require('../server/aiReportQuality');
 const { normalizeReportUserPrompt } = require('../server/aiReportInput');
 const { generateAiReport } = require('../server/aiReportService');
