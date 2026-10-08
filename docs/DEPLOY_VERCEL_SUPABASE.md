@@ -301,6 +301,10 @@ ARK_TIMEOUT_MS=270000
 
 ### 本机 Android 打包环境（2026-09-28 核对）
 
+构建 6 发布验证：APK release 构建、75 项相关 Flutter 测试以及与 Vercel 一致配置的 Web release 构建均成功。Android 构建产物、`web/downloads/guoxuewanbao-latest.apk` 与 Web 发布目录中的 APK 三者 SHA-256 一致。
+
+2026-10-08 更新：沿用下列原有环境构建 `1.0.0+6`，官网固定下载文件与下载页文案同步为构建 6。APK 大小 24,593,349 字节（约 23.5 MiB），SHA-256 为 `04ecb8b98ad21ae0e7e3a420828fe481d5efb6b4f0240775be953fa2c2ec192e`；包名保持 `com.guoxue.wanbaoxia`，最低 Android 5.0，包含 `arm64-v8a`、`armeabi-v7a`、`x86_64`。签名校验通过，证书 SHA-256 与构建 5 一致，可以直接覆盖安装，不要先卸载，以免清除本机资料。包含已验收的异步报告轮询、每日一卦当天报告恢复和报告 Markdown 展示；问事由 Vercel 执行，八字、紫微斗数和铁板神数仍由本机 Worker 执行。此次打包没有修改收费、提示词或业务逻辑；相关 Flutter 回归测试 75 项通过。仍沿用原测试签名，保留已有 Kotlin 元数据兼容性、Cupertino 字体与 APK 辅助元数据签名提示；尚未在实体手机验证安装及业务流程，不是应用市场正式发布包。下载页为 `https://guoxuewanbao.cn/download`，固定 APK 地址为 `https://guoxuewanbao.cn/downloads/guoxuewanbao-latest.apk`。
+
 2026-09-30 更新：使用下列原有环境构建 `1.0.0+5`，官网固定下载文件已替换为构建 5，下载页版本文案同步。APK 大小 24,085,544 字节，SHA-256 为 `311612e2e15fce0d86eaf447ec0e995b98081a0eb3f1922832dc6b8bf6e8895d`；包名保持 `com.guoxue.wanbaoxia`，最低 Android 5.0，签名证书与构建 4 一致，可以覆盖安装。包含最新解析重试、修改问题和钱包显示修复。构建通过，保留已有 Kotlin 元数据兼容性与 Cupertino 字体提示；本次只验证打包、版本和签名，实机业务由用户验收。仍使用原测试签名，不是应用市场正式签名。
 
 - 上周成功构建所用的 Gradle 用户目录是 `D:\AIProjects\.local-build-tools\gradle-user-home`，不是 `C:\Users\Administrator\.gradle`，也不是 `D:\AIProjects\tool\gradle-home-points*`。该目录包含 Gradle 7.6.3 与 Android/Kotlin 插件缓存。
