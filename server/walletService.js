@@ -392,7 +392,7 @@ async function createQueuedAiReportDebit({
       throw new HttpError(409, '已有同类报告正在生成，请在“我的报告”查看完成后再提交');
     }
     if (String(error.message || '').includes('AI_WORKER_UNAVAILABLE')) {
-      throw new HttpError(503, '解析服务暂未就绪，本次未扣积分，请稍后再试');
+      throw new HttpError(503, '命盘解析执行器未在线，本次未扣积分，请稍后再试');
     }
     throw new HttpError(503, '解析任务提交状态暂无法确认，请在“我的报告”查看；重试不会重复扣积分');
   }

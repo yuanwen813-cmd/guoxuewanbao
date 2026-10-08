@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 // Keep coverage of the explicitly retained synchronous rollback path.
 process.env.AI_CLOUD_POLLING_ENABLED = 'false';
+process.env.AI_NATAL_WORKER_ENABLED = 'false';
 const { callDoubao, getDoubaoConfig } = require('../server/doubaoClient');
 const { getAiProduct } = require('../server/productCatalog');
 const { generateAiReport } = require('../server/aiReportService');

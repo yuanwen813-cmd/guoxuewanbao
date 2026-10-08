@@ -5,6 +5,7 @@ const { getAiProduct } = require('./productCatalog');
 const {
   completeAiReport,
   createAiReportDebit,
+  createQueuedAiReportDebit,
   getAiReportForUser,
   getWallet,
   reconcileEmptyAiReportsForUser,
@@ -15,7 +16,7 @@ const { normalizeReportUserPrompt } = require('./aiReportInput');
 const { ensureDeliveredAiReport } = require('./aiReportQuality');
 const { recordServiceEventQuietly } = require('./monitoringService');
 const { callDoubao, getDoubaoConfig } = require('./doubaoClient');
-const { cloudPollingEnabled } = require('./aiReportMode');
+const { cloudPollingEnabled, usesNatalWorker } = require('./aiReportMode');
 
 function maxPromptChars() {
   return Math.max(1000, Number(process.env.AI_PROMPT_MAX_CHARS || 16000));
@@ -69,6 +70,7 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
   const productResolver = dependencies.getAiProduct || getAiProduct;
   const promptBuilder = dependencies.buildAiReportSystemPrompt || buildAiReportSystemPrompt;
   const debitReport = dependencies.createAiReportDebit || createAiReportDebit;
+  const queueReport = dependencies.createQueuedAiReportDebit || createQueuedAiReportDebit;
   const completeReport = dependencies.completeAiReport || completeAiReport;
   const refundReport = dependencies.refundAiReport || refundAiReport;
   const requestAi = dependencies.callDoubao || callDoubao;
@@ -117,14 +119,15 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
   );
 
   const promptSnapshot = [title, systemPrompt, userPrompt].join('\n\n');
-  const providerConfig = dependencies.callDoubao ? undefined : getDoubaoConfig();
+  const natalWorker = usesNatalWorker(product);
+  const providerConfig = natalWorker || dependencies.callDoubao ? undefined : getDoubaoConfig();
   if (body.requestId != null &&
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.requestId)) {
     throw new HttpError(400, '请求标识无效');
   }
   const requestId = body.requestId || crypto.randomUUID();
 
-  const debit = await debitReport({
+  const debit = await (natalWorker ? queueReport : debitReport)({
     userId,
     product,
     inputSnapshotJson,
@@ -132,6 +135,7 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
     questionResultJson,
     promptSnapshot,
     requestId,
+    ...(natalWorker ? { userPrompt, systemPrompt } : {}),
   });
 
   if (debit.alreadyPending) {
@@ -145,6 +149,13 @@ async function generateAiReport({ userId, body, dependencies = {} }) {
       report: debit.order,
       wallet: debit.wallet,
       alreadyPending: true,
+    };
+  }
+
+  if (natalWorker) {
+    return {
+      pending: true, answer: '', model: product.model,
+      report: debit.order, wallet: debit.wallet, alreadyPending: false,
     };
   }
 

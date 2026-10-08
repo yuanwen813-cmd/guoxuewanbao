@@ -46,8 +46,7 @@ async function run() {
     process.env.AI_LONG_REPORTS_ENABLED = 'true';
     let charged = 0;
     let providerCalls = 0;
-    // The retired queue RPC is kept for old jobs; the current API no longer
-    // dispatches to it. Cloud dispatch is covered by server_cloud_polling_test.
+    // The current API dispatches natal reports to this atomic queue RPC.
     const queued = await createQueuedAiReportDebit({
       userId: 'user-1', product: getAiProduct('ziwei_basic'),
       userPrompt: '命盘',
@@ -74,7 +73,7 @@ async function run() {
         userPrompt: '命盘', requestId: '7a2f6146-4e47-4b42-9d23-e23d85a15cb2' },
       dependencies: {
         callDoubao: async () => { throw new Error('reused report called provider'); },
-        createAiReportDebit: async () => ({
+        createQueuedAiReportDebit: async () => ({
           order: { id: job.order_id, status: 'refunded' },
           wallet: { balanceCents: 200 }, alreadyPending: true,
         }),

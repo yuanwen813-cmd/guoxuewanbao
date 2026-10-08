@@ -1,7 +1,7 @@
 # 全部 AI 解析异步化
 
-> 本页的本机 Worker 队列方案已被替代，不要按下文启用或重启 Worker。
-> 当前部署与验收请使用 [Vercel 云端解析轮询](CLOUD_POLLING_REPORTS.md)。
+> 本页“全部功能进入本机队列”的方案已被替代，不要执行下文旧迁移。
+> 当前问事/每日一卦使用 [Vercel 云端解析轮询](CLOUD_POLLING_REPORTS.md)，命盘使用 [本机 Worker](NATAL_WORKER_ROUTING.md)。
 > 原方案保留作历史说明，不代表当前生产接口的执行路径。
 
 本次只改任务执行、复看和展示。当前积分价格、豆包模型、提示词、支付回调、排盘算法不变。

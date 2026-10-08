@@ -257,20 +257,20 @@ ARK_TIMEOUT_MS=270000
 - 新起卦结果额外保存 UTC 时间，AI 请求附上换算后的完整北京时间，不使用报告请求时间替代。
 - 高岛易断在成卦时固定时间，页面重建不重取当前时间；梅花易数保存历史时复用已生成结果。命盘请求保留出生资料，不把报告生成时间当作起卦时间。
 - 新历史记录保留六爻结构区块；旧记录没有的内容不伪造，旧时间缺少时区时明确注明不足。排盘/起卦算法不变。
-- 全部解析默认使用 Vercel 官方 `waitUntil` 托管云端解析：数据库原子扣积分并创建报告，接口立即返回订单，页面轮询。不依赖本机 Node Worker、任务认领或心跳。部署步骤见 [云端轮询部署说明](CLOUD_POLLING_REPORTS.md)。
-- 当前 Vercel 函数上限仍为300秒，方舟请求超时仍为270秒。轮询不延长执行时限；失败会退款，函数被强制终止后的遗留订单由数据库定时检查，在超过15分钟后恢复退款。`ARK_LONG_TIMEOUT_MS` 不改变这个平台限制。
+- 问事/每日一卦使用 Vercel 官方 `waitUntil` 托管云端解析，不依赖本机。八字/紫微/铁板原子扣积分并入队，由本机 Worker 执行；全部接口立即返回订单、前端轮询。部署说明见 [云端轮询](CLOUD_POLLING_REPORTS.md) 和 [命盘 Worker](NATAL_WORKER_ROUTING.md)。
+- 云端函数上限300秒、方舟请求270秒；命盘 Worker 执行上限15分钟、排队最多30分钟。失败退款，Supabase Cron 每分钟回收中断或过期任务。`ARK_LONG_TIMEOUT_MS` 不改变这些时限。
 - 前端轮询、“我的报告”详情自动刷新、每日一卦同账号当天报告恢复均不重复扣积分。已完成报告复看免费。
 
-### 云端轮询部署（启用前必做）
+### 云端与命盘 Worker 部署
 
-1. 确认当前没有正在生成的报告，再停止旧本机 Worker。保留已有 `ai_report_jobs.sql`、积分迁移和结算保护脚本；不要重建钱包或删除历史订单。
-2. 在 Supabase SQL Editor **单独执行** `supabase/ai_cloud_polling_migration.sql`，再执行更新后的 `supabase/ai_report_timeout_cron.sql`。本版本不要执行旧的 `ai_all_async_migration.sql`，它属于本机 Worker 方案。
-3. Vercel 部署本版本并安装锁定依赖，使用 Node 20+ 和 Fluid Compute。`AI_CLOUD_POLLING_ENABLED=true` 默认开启；旧的 `AI_ASYNC_REPORTS_ENABLED`、`AI_LONG_REPORTS_ENABLED` 已不控制新解析，可以删除。只在服务端配置 Supabase 服务角色和方舟密钥，不添加到 Flutter 构建参数。
-4. 所有问事、每日一卦和命盘解析都在 Vercel 执行，不需要本机开机、Worker 心跳或额外服务器。保留原方舟模型、提示词与2积分价格。托管工作仍受当前300秒函数上限约束，不保证15分钟模型执行。
-5. 本机关机后用测试账号解析：创建接口应立即返回 202 和 `generating`，页面轮询；“我的报告”可查看进度与全文，重复点击只有一笔扣积分。当天已完成的每日一卦自动恢复，复看不扣积分。
-6. 确认 Supabase Cron 的 `guoxue-ai-report-timeout` 每分钟运行且无错误，核对报告状态和积分流水。函数中断遗留的生成中订单超过15分钟后由数据库恢复退款；已有旧队列订单也会检查。服务异常、调度积压或数据库不可用时退款可能延迟，详见云端部署说明。
+1. 确认没有正在生成的报告，再暂停旧 Worker。保留已有任务表、积分迁移和结算保护，不重建钱包或删除历史订单。
+2. 已执行云端迁移与定时退款脚本的项目，本次只补执行 `supabase/ai_natal_worker_migration.sql`。首次部署应先按云端文档初始化。不要执行旧的 `ai_all_async_migration.sql`，它会覆盖每日一卦 RPC。
+3. Vercel 部署本版本，保持 Node 20+、Fluid Compute、`AI_CLOUD_POLLING_ENABLED=true`，增加 `AI_NATAL_WORKER_ENABLED=true`（两者默认开启）。旧的 `AI_ASYNC_REPORTS_ENABLED`、`AI_LONG_REPORTS_ENABLED` 不再控制分流。
+4. 沿用本机 `.env.local` 的 Supabase 服务角色和方舟设置，重新启动同版本 Worker，确保心跳刷新。可以在项目目录使用 `node --env-file=.env.local server/aiReportWorker.js`，保持电脑及进程运行。密钥不进入 Flutter 构建参数。
+5. Worker 关闭超过90秒后，问事/每日一卦仍能解析，新命盘拒绝且不扣积分。启动后八字/紫微/铁板可解析超过5分钟的报告，最多执行15分钟；前端均立即进入生成中，“我的报告”可复看，重复点击只有一笔扣积分。
+6. 保留原 `guoxue-ai-report-timeout` 每分钟调度，无需重新创建。核对运行记录、报告状态和积分流水；回收云端中断订单与 Worker 过期任务。数据库不可用或积压可能延迟退款，详见两份部署文档。
 
-如需暂时回退响应方式，可设置 `AI_CLOUD_POLLING_ENABLED=false` 保持 Vercel 原同步响应，不会改用本机 Worker。本机测试通过不代表生产迁移、Cron 和真实长报告已验证。
+`AI_CLOUD_POLLING_ENABLED=false` 只把问事/每日一卦改为云端同步响应，命盘仍入本机队列。`AI_NATAL_WORKER_ENABLED=false` 才会将命盘暂时切回受300秒限制的 Vercel；不建议用它解决长报告超时。本机测试不能替代生产迁移、Cron 和真实长报告验收。
 
 ### 联调与测试
 

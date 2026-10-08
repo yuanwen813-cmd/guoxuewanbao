@@ -5,10 +5,10 @@ const { processJob } = require('../server/aiReportWorker');
 
 async function main() {
   delete process.env.AI_CLOUD_POLLING_ENABLED;
+  delete process.env.AI_NATAL_WORKER_ENABLED;
   process.env.AI_ASYNC_REPORTS_ENABLED = 'true';
   process.env.AI_LONG_REPORTS_ENABLED = 'true';
-  for (const productId of ['question_full_3_9', 'daily_hexagram_brief',
-    'bazi_basic_3_9', 'ziwei_basic', 'tieban_basic']) {
+  for (const productId of ['question_full_3_9', 'daily_hexagram_brief']) {
     let debits = 0;
     const tasks = [];
     let finish;
@@ -76,6 +76,6 @@ async function main() {
   }});
   assert.equal(report.resultText, '今日报告');
   assert.equal(report.source.featureId, 'daily_hexagram');
-  console.log('all-products cloud polling, legacy deadline and daily ownership checks passed');
+  console.log('question/daily cloud polling, Worker deadline and daily ownership checks passed');
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });
