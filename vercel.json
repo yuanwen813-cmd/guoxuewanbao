@@ -105,6 +105,14 @@
       "destination": "/api/index?path=:path*"
     },
     {
+      "source": "/learn/yarrow",
+      "destination": "/learn/yarrow/index.html"
+    },
+    {
+      "source": "/learn/yarrow/",
+      "destination": "/learn/yarrow/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,6 +9,8 @@ import '../../domain/history/divination_history.dart';
 import '../../infrastructure/history_service/history_service.dart';
 import '../home/home_state.dart';
 import 'feature_catalog_v2.dart';
+import 'tutorial_launcher.dart'
+    if (dart.library.html) 'tutorial_launcher_web.dart';
 import 'v2_page_scaffold.dart';
 
 class HomePageV2 extends ConsumerWidget {
@@ -26,6 +29,8 @@ class HomePageV2 extends ConsumerWidget {
       icon: Icons.auto_awesome,
       children: [
         _TodayStrip(dateText: dateText, tip: tip),
+        const SizedBox(height: 16),
+        const _LearningGuideCard(),
         const V2SectionTitle(title: '今日要览'),
         V2FeatureGrid(
           entries: [
@@ -56,6 +61,50 @@ class HomePageV2 extends ConsumerWidget {
         else
           _RecentRecordList(records: recentRecords),
       ],
+    );
+  }
+}
+
+class _LearningGuideCard extends StatelessWidget {
+  const _LearningGuideCard();
+
+  static String get _url {
+    final incoming = Uri.base.queryParameters;
+    final defaults = {
+      'utm_source': 'app_home',
+      'utm_medium': 'referral',
+      'utm_campaign': 'yarrow_20261008',
+    };
+    final query = defaults.map((key, fallback) {
+      final value = incoming[key];
+      return MapEntry(
+          key,
+          value != null &&
+                  RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$').hasMatch(value)
+              ? value
+              : fallback);
+    });
+    return Uri.https('guoxuewanbao.cn', '/learn/yarrow', query).toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: GuoXueColors.ricePaper,
+      child: ListTile(
+        leading: const Icon(Icons.menu_book, color: GuoXueColors.primary),
+        title: const Text('免费教材：蓍草起卦入门'),
+        subtitle: const Text('十八变步骤 · 六爻练习 · 打印保存'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () async {
+          if (await openTutorial(_url)) return;
+          await Clipboard.setData(ClipboardData(text: _url));
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('教材链接已复制，可在浏览器中打开')),
+          );
+        },
+      ),
     );
   }
 }
