@@ -48,6 +48,7 @@
       align-items: center;
       justify-content: center;
       padding: 24px;
+      overflow-y: auto;
       box-sizing: border-box;
       background: #f7f4ee;
       color: #2d261f;
@@ -56,6 +57,7 @@
 
     .app-loader-content {
       width: min(360px, 100%);
+      margin: auto;
       text-align: center;
     }
 
@@ -82,6 +84,31 @@
       line-height: 1.7;
     }
 
+    .app-loader-intro {
+      margin-top: 18px;
+      color: #6d6258;
+      font-size: 12px;
+      line-height: 1.75;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+
+    .app-loader-intro p {
+      margin: 0 0 10px;
+    }
+
+    .app-loader-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px 14px;
+    }
+
+    .app-loader-links a {
+      color: #345c4c;
+      text-underline-offset: 3px;
+    }
+
     #app-loader-retry {
       display: none;
       margin: 18px auto 0;
@@ -105,7 +132,15 @@
       <div class="app-loader-mark" aria-hidden="true"></div>
       <h1 class="app-loader-title">国学万宝匣</h1>
       <p id="app-loader-status" class="app-loader-status">正在加载，请稍候...</p>
-      <p><a href="/learn/yarrow" style="color: #345c4c; font-size: 14px;">免费教材：蓍草起卦入门</a></p>
+      <div class="app-loader-intro">
+        <p>免费学习蓍草起卦，查阅《周易》卦爻经文，结合古籍资料理解《高岛易断》的阅读方法。教材含十八变操作、六爻记录、本卦与变卦练习。</p>
+        <p>国学万宝匣支持网页版与 Android 测试版。教程和经典查阅免费开放；AI 解读为可选服务，价格以使用页面为准。</p>
+        <nav class="app-loader-links" aria-label="学习与下载入口">
+          <a href="/learn/yarrow">免费教材：蓍草起卦入门</a>
+          <a href="/reference/zhouyi">周易原文</a>
+          <a href="/download">Android 测试版下载</a>
+        </nav>
+      </div>
       <button id="app-loader-retry" type="button">重新加载</button>
     </div>
   </div>
